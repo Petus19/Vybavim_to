@@ -1,0 +1,62 @@
+# Vývojové prostredie – spustenie: docker compose up -d
+# Prihlasovacie údaje nižšie sú iba pre lokálny vývoj.
+
+services:
+  # --- Aplikácie (doplnia sa po rozhodnutí o jazyku backendu) ---
+  # web:         # Next.js – frontend
+  # api:         # NestJS / ASP.NET Core – REST API + WebSockety
+  # worker:      # rovnaký kód ako api – úlohy z fronty
+  # ai-service:  # Python / FastAPI (neskôr)
+
+  # --- Infraštruktúra ---
+  db:
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM postgres:17
+        RUN apt-get update \
+         && apt-get install -y --no-install-recommends postgresql-17-postgis-3 postgresql-17-pgvector \
+         && rm -rf /var/lib/apt/lists/*
+    environment:
+      POSTGRES_USER: vybavim
+      POSTGRES_PASSWORD: vybavim
+      POSTGRES_DB: vybavim
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vybavim -d vybavim"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: vybavim
+      MINIO_ROOT_PASSWORD: vybavim-dev
+    ports:
+      - "9000:9000" # S3 API
+      - "9001:9001" # webová konzola
+    volumes:
+      - minio-data:/data
+
+  mailpit:
+    image: axllent/mailpit
+    ports:
+      - "1025:1025" # SMTP
+      - "8025:8025" # webové rozhranie
+
+volumes:
+  db-data:
+  redis-data:
+  minio-data:

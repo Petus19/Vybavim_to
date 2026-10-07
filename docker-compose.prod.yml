@@ -1,0 +1,7 @@
+# Produkcia – doplní sa po rozhodnutí o jazyku backendu a hostingu
+# (VPS s Docker Compose alebo spravovaná cloudová služba).
+#
+# Plánované služby: web, api, worker, db, redis, minio (→ S3), ai-service (neskôr).
+# Heslá a kľúče nikdy nezapisovať sem – načítajú sa z .env (mimo gitu).
+
+services: {}
