@@ -78,34 +78,38 @@ flowchart TB
 
 ### Pravidlá architektúry
 
-1. **Moduly si nesiahajú do tabuliek.** Modul komunikuje s iným modulom iba cez jeho verejné rozhranie.
+1. **Moduly si nesiahajú do tabuliek.** Modul komunikuje s iným modulom iba cez jeho `InternalApi/` (volanie v rámci procesu, nie HTTP).
 2. **Komunikácia cez udalosti.** Napríklad modul Projekty vyšle `ProjectCompleted`, Recenzie potom vyzvú na hodnotenie a Notifikácie pošlú e-mail. Moduly o sebe nemusia vedieť.
 3. **Outbox pattern.** Udalosť sa uloží do DB v tej istej transakcii ako zmena a až potom ide do fronty. Pri výpadku Redisu sa tak nič nestratí, čo je dôležité najmä pri platbách.
 4. **Vrstvy v každom module:**
-   - `api/`: kontroléry, validácia vstupu
-   - `application/`: prípady použitia („pridaj inzerát“, „odpovedz na inzerát“)
-   - `domain/`: biznis pravidlá (napr. recenzia iba k dokončenému projektu)
-   - `infrastructure/`: databáza, externé služby
-5. **API-first.** REST s OpenAPI dokumentáciou a verziovaním (`/api/v1/…`). Web aj mobil si z neho generujú typovaného klienta. Biznis logika nepatrí do frontendu.
-6. **Autentifikácia.** Krátkodobý access token a refresh token, ktorý je na webe v httpOnly cookie a v mobile v bezpečnom úložisku.
+   - `PublicApi/`: REST endpointy pre web a mobil, validácia vstupu
+   - `InternalApi/`: rozhranie pre ostatné moduly
+   - `Application/`: prípady použitia („pridaj inzerát“, „odpovedz na inzerát“)
+   - `Domain/`: biznis pravidlá (napr. recenzia iba k dokončenému projektu)
+   - `Infrastructure/`: DbContext modulu (iba jeho tabuľky), externé služby
+5. **Žiadna duplicita, ale ani zdieľaná biznis logika.** Spoločný technický kód (pripojenie k DB, `BaseDbContext`, auth, chyby, extension metódy) je raz v `Backend/Common/`. Biznis logika tam nepatrí, zostáva vo svojom module.
+6. **API-first.** REST s OpenAPI dokumentáciou a verziovaním (`/api/v1/…`). Web aj mobil si z neho generujú typovaného klienta. Biznis logika nepatrí do frontendu.
+7. **Autentifikácia.** Krátkodobý access token a refresh token, ktorý je na webe v httpOnly cookie a v mobile v bezpečnom úložisku.
 
 ---
 
 ## Moduly
 
+Moduly sú v `Backend/Modules/`.
+
 | Modul | Priečinok | Zodpovednosť |
 |---|---|---|
-| Účty | `identity/` | Registrácia a prihlásenie (e-mail, Google, Apple), overenie identity, nastavenia a preferencie |
-| Profily | `profiles/` | Jednotlivec (meno, profesia, portfólio, kontakty) a firma (názov, popis, logo, projekty) |
-| Inzeráty | `listings/` | Pridanie inzerátu: kategória, popis, rozpočet, harmonogram; topovanie |
-| Projekty | `projects/` | Z odpovede na inzerát vznikne projekt; stavy *otvorený → prebieha → dokončený* |
-| Vyhľadávanie | `search/` | Fulltext, filtre (kategória, cena, lokalita, typ projektu), obľúbené inzeráty |
-| Komunikácia | `chat/` | Interný chat, textové správy, zdieľanie súborov |
-| Notifikácie | `notifications/` | Odpovede na inzeráty, nové správy, zmeny v projektoch; e-mail, in-app, neskôr push |
-| Recenzie | `reviews/` | Hodnotenie 1–5 ★, textová recenzia, história spolupráce, nahlasovanie používateľov |
-| Platby | `payments/` | Predplatné, topovanie, Stripe, faktúry a výkazy |
-| Administrácia | `admin/` | Moderovanie obsahu, štatistiky, správa predplatného a platieb |
-| GDPR | `gdpr/` | Ochrana osobných údajov, šifrovanie komunikácie, súhlasy, export a zmazanie dát |
+| Účty | `Identity/` | Registrácia a prihlásenie (e-mail, Google, Apple), overenie identity, nastavenia a preferencie |
+| Profily | `Profiles/` | Jednotlivec (meno, profesia, portfólio, kontakty) a firma (názov, popis, logo, projekty) |
+| Inzeráty | `Listings/` | Pridanie inzerátu: kategória, popis, rozpočet, harmonogram; topovanie |
+| Projekty | `Projects/` | Z odpovede na inzerát vznikne projekt; stavy *otvorený → prebieha → dokončený* |
+| Vyhľadávanie | `Search/` | Fulltext, filtre (kategória, cena, lokalita, typ projektu), obľúbené inzeráty |
+| Komunikácia | `Chat/` | Interný chat, textové správy, zdieľanie súborov |
+| Notifikácie | `Notifications/` | Odpovede na inzeráty, nové správy, zmeny v projektoch; e-mail, in-app, neskôr push |
+| Recenzie | `Reviews/` | Hodnotenie 1–5 ★, textová recenzia, história spolupráce, nahlasovanie používateľov |
+| Platby | `Payments/` | Predplatné, topovanie, Stripe, faktúry a výkazy |
+| Administrácia | `Admin/` | Moderovanie obsahu, štatistiky, správa predplatného a platieb |
+| GDPR | `Gdpr/` | Ochrana osobných údajov, šifrovanie komunikácie, súhlasy, export a zmazanie dát |
 
 ---
 
@@ -155,34 +159,44 @@ Treba rozlišovať dve veci:
 
 ## Štruktúra projektu
 
-Plánovaná štruktúra monorepa:
-
 ```
-vybavim-to/
-├── apps/
-│   ├── web/                  # Next.js, frontend
-│   ├── api/                  # backend, modulárny monolit
-│   │   └── src/modules/
-│   │       ├── identity/
-│   │       ├── profiles/
-│   │       ├── listings/
-│   │       ├── projects/
-│   │       ├── search/
-│   │       ├── chat/
-│   │       ├── notifications/
-│   │       ├── reviews/
-│   │       ├── payments/
-│   │       ├── admin/
-│   │       └── gdpr/
-│   ├── worker/               # spracovanie úloh z fronty
-│   └── ai-service/           # Python / FastAPI (neskôr)
-├── packages/
-│   └── shared/               # typy, validačné schémy, API klient
-├── docker-compose.yml        # vývoj
-└── docker-compose.prod.yml   # produkcia
+Vybavim_to/
+├── Frontend/
+│   ├── Web/                      # Next.js
+│   └── Mobile/                   # Expo (neskôr)
+├── Backend/
+│   ├── Api/                      # spúšťací projekt, iba zapojí Common a moduly
+│   ├── Common/                   # spoločný technický kód (bez biznis logiky)
+│   │   ├── Database/             # BaseDbContext, pripojenie, outbox
+│   │   ├── Auth/                 # JWT, oprávnenia
+│   │   ├── Events/               # doménové udalosti, fronta
+│   │   ├── Errors/               # jednotné spracovanie chýb
+│   │   └── Extensions/           # extension metódy (AddPostgres, AddRedis, …)
+│   ├── Modules/
+│   │   ├── Identity/
+│   │   │   ├── PublicApi/        # REST endpointy /api/v1 pre web a mobil
+│   │   │   ├── InternalApi/      # rozhranie pre ostatné moduly
+│   │   │   ├── Application/
+│   │   │   ├── Domain/
+│   │   │   └── Infrastructure/
+│   │   ├── Profiles/
+│   │   ├── Listings/
+│   │   ├── Projects/
+│   │   ├── Search/
+│   │   ├── Chat/
+│   │   ├── Notifications/
+│   │   ├── Reviews/
+│   │   ├── Payments/
+│   │   ├── Admin/
+│   │   └── Gdpr/
+│   ├── Worker/                   # spracovanie úloh z fronty
+│   └── AiService/                # Python / FastAPI (neskôr)
+├── Shared/                       # typy, validačné schémy, API klient pre Web a Mobile
+├── docker-compose.yml            # vývoj
+└── docker-compose.prod.yml       # produkcia
 ```
 
-> **Variant v C#:** jedno solution, každý modul ako samostatný projekt (`Vybavim.Listings`, `Vybavim.Payments`, …). Worker je `BackgroundService` alebo Hangfire server.
+> **Variant v C#:** `Backend/` je jedno solution. `Api`, `Common`, `Worker` a každý modul (`Vybavim.Modules.Listings`, `Vybavim.Modules.Payments`, …) sú samostatné projekty. Worker je `BackgroundService` alebo Hangfire server.
 
 ---
 
