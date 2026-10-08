@@ -24,19 +24,19 @@ Vybavím to je **dvojstranný marketplace**: na jednej strane sú zadávatelia p
 | Vrstva | Voľba | Prečo |
 |---|---|---|
 | Frontend | **Next.js** (React, TypeScript) | SEO pre verejné inzeráty, SSR, veľký ekosystém |
-| Backend API | **NestJS** (TS) alebo **ASP.NET Core** (C#) | Jedno API pre web aj mobil, WebSockety, webhooky |
-| Worker | BullMQ (TS) / Hangfire (C#) | Úlohy na pozadí, opakovanie pri chybe, cron |
+| Backend API | **ASP.NET Core** (C#, .NET 10), Minimal APIs | Jedno API pre web aj mobil, WebSockety, webhooky |
+| Worker | .NET Worker Service + Hangfire alebo Wolverine | Úlohy na pozadí, opakovanie pri chybe, cron |
 | Databáza | **PostgreSQL** + PostGIS + pgvector | Relačné dáta, fulltext, lokalita, embeddingy pre AI |
-| ORM | Prisma / Drizzle (TS), EF Core (C#) | Typovo bezpečný prístup k dátam a migrácie |
+| ORM | **EF Core** + Npgsql | Typovo bezpečný prístup k dátam a migrácie |
 | Cache a fronty | **Redis** | Fronta úloh, real-time (pub/sub), cache, sessions |
 | Súbory | **MinIO** (v produkcii S3) | Portfóliá, prílohy v chate, logá firiem |
-| Real-time | Socket.IO (TS) / SignalR (C#) | Chat a notifikácie |
+| Real-time | **SignalR** | Chat a notifikácie |
 | Autentifikácia | E-mail + Google/Apple (OAuth) | Access + refresh token pre web aj mobil |
 | Platby | **Stripe** (neskôr Stripe Connect) | Predplatné, topovanie, faktúry, neskôr escrow |
 | AI / ML | **Python** (FastAPI), samostatná služba | Celý ML ekosystém je v Pythone |
-| Mobil *(neskôr)* | React Native / Expo | Zdieľanie typov a logiky s webom |
+| Mobil *(neskôr)* | React Native / Expo | Zdieľanie TS API klienta s webom |
 
-> Jazyk backendu ešte nie je rozhodnutý, porovnanie je v časti [Otvorené rozhodnutia](#otvorené-rozhodnutia).
+> Backend je v **C#**, frontend v **TypeScripte**. Spájajú ich typy vygenerované z OpenAPI špecifikácie backendu.
 
 ---
 
@@ -78,18 +78,19 @@ flowchart TB
 
 ### Pravidlá architektúry
 
-1. **Moduly si nesiahajú do tabuliek.** Modul komunikuje s iným modulom iba cez jeho `InternalApi/` (volanie v rámci procesu, nie HTTP).
+1. **Moduly si nesiahajú do tabuliek ani tried.** Každý modul tvoria dva projekty: implementácia (všetko `internal`) a `.Contracts` (rozhrania, DTO, udalosti). Iné moduly referencujú **iba `.Contracts`**, takže hranicu stráži kompilátor a nevzniknú cyklické závislosti (napr. Projects ↔ Listings). Volanie je v rámci procesu, nie cez HTTP.
 2. **Komunikácia cez udalosti.** Napríklad modul Projekty vyšle `ProjectCompleted`, Recenzie potom vyzvú na hodnotenie a Notifikácie pošlú e-mail. Moduly o sebe nemusia vedieť.
 3. **Outbox pattern.** Udalosť sa uloží do DB v tej istej transakcii ako zmena a až potom ide do fronty. Pri výpadku Redisu sa tak nič nestratí, čo je dôležité najmä pri platbách.
-4. **Vrstvy v každom module:**
-   - `PublicApi/`: REST endpointy pre web a mobil, validácia vstupu
-   - `InternalApi/`: rozhranie pre ostatné moduly
+4. **Vrstvy v implementácii modulu** (priečinky, nie samostatné projekty; poradie strážia architektonické testy):
+   - `Endpoints/`: REST endpointy pre web a mobil (Minimal APIs), validácia vstupu
    - `Application/`: prípady použitia („pridaj inzerát“, „odpovedz na inzerát“)
-   - `Domain/`: biznis pravidlá (napr. recenzia iba k dokončenému projektu)
-   - `Infrastructure/`: DbContext modulu (iba jeho tabuľky), externé služby
-5. **Žiadna duplicita, ale ani zdieľaná biznis logika.** Spoločný technický kód (pripojenie k DB, `BaseDbContext`, auth, chyby, extension metódy) je raz v `Backend/Common/`. Biznis logika tam nepatrí, zostáva vo svojom module.
-6. **API-first.** REST s OpenAPI dokumentáciou a verziovaním (`/api/v1/…`). Web aj mobil si z neho generujú typovaného klienta. Biznis logika nepatrí do frontendu.
-7. **Autentifikácia.** Krátkodobý access token a refresh token, ktorý je na webe v httpOnly cookie a v mobile v bezpečnom úložisku.
+   - `Domain/`: entity a biznis pravidlá (napr. recenzia iba k dokončenému projektu)
+   - `Infrastructure/`: DbContext modulu, migrácie, externé služby
+5. **Vlastná DB schéma pre každý modul** (`listings`, `projects`, …) s vlastnou históriou migrácií. Vo vývoji migrácie spúšťa Api pri štarte, v produkcii samostatný krok pred nasadením.
+6. **Žiadna duplicita, ale ani zdieľaná biznis logika.** Spoločný technický kód (pripojenie k DB, `BaseDbContext`, auth, chyby, extension metódy) je raz v `Backend/Common/`. Biznis logika tam nepatrí, zostáva vo svojom module.
+7. **API-first.** REST s OpenAPI dokumentáciou a verziovaním (`/api/v1/…`). Web aj mobil si z neho generujú typovaného klienta. Biznis logika nepatrí do frontendu.
+8. **Moduly naprieč všetkými dátami** (`Gdpr`, `Admin`) pracujú cez rozhrania v `.Contracts`. Každý modul napríklad implementuje export a anonymizáciu svojich osobných údajov a `Gdpr` ich iba zavolá.
+9. **Autentifikácia.** Krátkodobý access token a refresh token, ktorý je na webe v httpOnly cookie a v mobile v bezpečnom úložisku.
 
 ---
 
@@ -101,9 +102,8 @@ Moduly sú v `Backend/Modules/`.
 |---|---|---|
 | Účty | `Identity/` | Registrácia a prihlásenie (e-mail, Google, Apple), overenie identity, nastavenia a preferencie |
 | Profily | `Profiles/` | Jednotlivec (meno, profesia, portfólio, kontakty) a firma (názov, popis, logo, projekty) |
-| Inzeráty | `Listings/` | Pridanie inzerátu: kategória, popis, rozpočet, harmonogram; topovanie |
+| Inzeráty | `Listings/` | Pridanie inzerátu: kategória, popis, rozpočet, harmonogram; topovanie. V MVP aj vyhľadávanie: fulltext, filtre (kategória, cena, lokalita, typ projektu), obľúbené inzeráty |
 | Projekty | `Projects/` | Z odpovede na inzerát vznikne projekt; stavy *otvorený → prebieha → dokončený* |
-| Vyhľadávanie | `Search/` | Fulltext, filtre (kategória, cena, lokalita, typ projektu), obľúbené inzeráty |
 | Komunikácia | `Chat/` | Interný chat, textové správy, zdieľanie súborov |
 | Notifikácie | `Notifications/` | Odpovede na inzeráty, nové správy, zmeny v projektoch; e-mail, in-app, neskôr push |
 | Recenzie | `Reviews/` | Hodnotenie 1–5 ★, textová recenzia, história spolupráce, nahlasovanie používateľov |
@@ -148,12 +148,14 @@ Treba rozlišovať dve veci:
 - plánované úlohy cez cron (vypršanie topovania a prémia, archivácia inzerátov, upomienky na recenziu)
 - štatistiky pre administráciu a AI úlohy (embeddingy, moderácia)
 
-| | TypeScript | C# |
-|---|---|---|
-| Fronta úloh | BullMQ (Redis) | Hangfire / MassTransit |
-| Opakovanie, oneskorené úlohy, cron | áno | áno |
-| Dashboard úloh | Bull Board | Hangfire Dashboard |
-| Real-time | Socket.IO | SignalR |
+| Úloha | Riešenie v .NET |
+|---|---|
+| Fronta úloh, opakovanie, oneskorené úlohy, cron | **Hangfire** alebo **Wolverine** (rozhodne sa vo Fáze 0) |
+| Outbox | vlastný jednoduchý outbox v EF Core, alebo vstavaný outbox vo Wolverine |
+| Dashboard úloh | Hangfire Dashboard |
+| Real-time | SignalR (Redis backplane pri viacerých serveroch) |
+
+> MassTransit od verzie 9 vyžaduje komerčnú licenciu, preto ho pred výberom treba overiť alebo použiť jednu z alternatív vyššie.
 
 ---
 
@@ -162,41 +164,45 @@ Treba rozlišovať dve veci:
 ```
 Vybavim_to/
 ├── Frontend/
-│   ├── Web/                      # Next.js
-│   └── Mobile/                   # Expo (neskôr)
+│   ├── Web/                          # Next.js
+│   ├── Mobile/                       # Expo (neskôr)
+│   └── Shared/                       # TS API klient vygenerovaný z OpenAPI pre Web a Mobile
 ├── Backend/
-│   ├── Api/                      # spúšťací projekt, iba zapojí Common a moduly
-│   ├── Common/                   # spoločný technický kód (bez biznis logiky)
-│   │   ├── Database/             # BaseDbContext, pripojenie, outbox
-│   │   ├── Auth/                 # JWT, oprávnenia
-│   │   ├── Events/               # doménové udalosti, fronta
-│   │   ├── Errors/               # jednotné spracovanie chýb
-│   │   └── Extensions/           # extension metódy (AddPostgres, AddRedis, …)
+│   ├── Vybavim.slnx                  # solution
+│   ├── global.json                   # pevná verzia .NET SDK
+│   ├── Directory.Build.props         # spoločné nastavenia (.NET 10, nullable, warnings as errors)
+│   ├── Directory.Packages.props      # centrálne verzie NuGet balíkov
+│   ├── .editorconfig                 # formátovanie a analyzátory
+│   ├── Api/                          # Vybavim.Api – spúšťací projekt, iba zapojí Common a moduly
+│   ├── Worker/                       # Vybavim.Worker – spracovanie úloh z fronty
+│   ├── Common/                       # Vybavim.Common – technický kód (bez biznis logiky)
+│   │   ├── Database/                 # BaseDbContext, pripojenie, outbox
+│   │   ├── Auth/                     # JWT, oprávnenia
+│   │   ├── Events/                   # doménové udalosti, fronta
+│   │   ├── Errors/                   # jednotné spracovanie chýb
+│   │   └── Extensions/               # extension metódy (AddPostgres, AddRedis, …)
 │   ├── Modules/
 │   │   ├── Identity/
-│   │   │   ├── PublicApi/        # REST endpointy /api/v1 pre web a mobil
-│   │   │   ├── InternalApi/      # rozhranie pre ostatné moduly
-│   │   │   ├── Application/
-│   │   │   ├── Domain/
-│   │   │   └── Infrastructure/
+│   │   │   ├── Identity/             # Vybavim.Modules.Identity – implementácia (internal)
+│   │   │   │   ├── Endpoints/        # REST endpointy /api/v1 pre web a mobil
+│   │   │   │   ├── Application/
+│   │   │   │   ├── Domain/
+│   │   │   │   └── Infrastructure/
+│   │   │   └── Identity.Contracts/   # Vybavim.Modules.Identity.Contracts – kontrakt pre ostatné moduly
 │   │   ├── Profiles/
-│   │   ├── Listings/
+│   │   ├── Listings/                 # vrátane vyhľadávania v MVP
 │   │   ├── Projects/
-│   │   ├── Search/
 │   │   ├── Chat/
 │   │   ├── Notifications/
 │   │   ├── Reviews/
 │   │   ├── Payments/
 │   │   ├── Admin/
 │   │   └── Gdpr/
-│   ├── Worker/                   # spracovanie úloh z fronty
-│   └── AiService/                # Python / FastAPI (neskôr)
-├── Shared/                       # typy, validačné schémy, API klient pre Web a Mobile
-├── docker-compose.yml            # vývoj
-└── docker-compose.prod.yml       # produkcia
+│   ├── Tests/                        # unit, integračné (Testcontainers) a architektonické testy
+│   └── AiService/                    # Python / FastAPI (neskôr)
+├── docker-compose.yml                # vývoj
+└── docker-compose.prod.yml           # produkcia
 ```
-
-> **Variant v C#:** `Backend/` je jedno solution. `Api`, `Common`, `Worker` a každý modul (`Vybavim.Modules.Listings`, `Vybavim.Modules.Payments`, …) sú samostatné projekty. Worker je `BackgroundService` alebo Hangfire server.
 
 ---
 
@@ -205,7 +211,7 @@ Vybavim_to/
 | Služba | Image / technológia | Účel |
 |---|---|---|
 | `web` | Next.js | Frontend |
-| `api` | NestJS / ASP.NET Core | REST API + WebSockety |
+| `api` | ASP.NET Core | REST API + WebSockety |
 | `worker` | rovnaký kód ako `api` | Úlohy z fronty, škáluje sa samostatne |
 | `db` | `postgres:17` + PostGIS + pgvector | Hlavná databáza |
 | `redis` | `redis:7` | Fronta úloh, real-time, cache |
@@ -226,7 +232,12 @@ Vybavim_to/
 
 ### Fáza 0: základ
 
-- [ ] Monorepo, Docker Compose, CI, lint, typecheck
+- [x] Štruktúra solution: projekty `Api`, `Worker`, `Common`, moduly s `.Contracts`, spoločné nastavenia
+- [ ] Kostra backendu: `Common` (konfigurácia, DB, auth, chyby, logovanie), registrácia modulov, OpenAPI, health check
+- [ ] Testy: architektonické testy hraníc modulov, Testcontainers pre integračné testy
+- [ ] Docker: Dockerfile pre `api` a `worker`, doplnenie do `docker-compose.yml`
+- [ ] CI (GitHub Actions): build, testy, formátovanie (`dotnet format`), build Docker images
+- [ ] Fronta a outbox: výber Hangfire / Wolverine
 - [ ] Návrh DB schémy: `users`, `profiles`, `categories`, `listings`, `applications`, `projects`, `messages`, `reviews`
 - [ ] Zber udalostí (analytika) od prvého dňa ako podklad pre budúce ML
 
@@ -274,7 +285,7 @@ Vybavim_to/
 - **Synchrónne volania** (asistent, agent v chate) idú cez API do `ai-service` a výstup sa streamuje do webu.
 - **Asynchrónne úlohy** (embeddingy, moderácia, detekcia podvodov) idú cez frontu a worker.
 - Agent **nepristupuje priamo k databáze**. Ako nástroje volá verejné API modulov, takže má rovnaké oprávnenia ako používateľ.
-- Ak pôjde iba o LLM cez API bez vlastných modelov, dá sa to postaviť aj priamo v TS/C#. Python je nutný až pri vlastnom tréningu.
+- Ak pôjde iba o LLM cez API bez vlastných modelov, dá sa to postaviť aj priamo v C#. Python je nutný až pri vlastnom tréningu.
 
 **Čo pripraviť už v MVP:**
 
@@ -302,26 +313,14 @@ Vybavim_to/
 
 ## Otvorené rozhodnutia
 
-- [ ] **Jazyk backendu:** TypeScript (NestJS) alebo C# (ASP.NET Core)
+- [x] **Jazyk backendu:** C# (ASP.NET Core, .NET 10)
+- [x] **ORM:** EF Core + Npgsql
+- [ ] **Fronta úloh a outbox:** Hangfire alebo Wolverine
 - [ ] **Úvodná nika:** ktoré kategórie a ktorý región na štart
-- [ ] **ORM:** Prisma alebo Drizzle (pri TS), EF Core (pri C#)
 - [ ] **Hosting produkcie:** VPS s Docker Compose alebo spravovaná cloudová služba
-
-### TypeScript vs. C#
-
-Frontend bude v TypeScripte v každom prípade, rozhoduje sa iba o jazyku backendu.
-
-| TypeScript (NestJS) | C# (ASP.NET Core) |
-|---|---|
-| ✅ Jeden jazyk pre web, API aj mobilnú appku | ✅ Vyšší výkon, plnohodnotná viacvláknovosť |
-| ✅ Zdieľané typy a validačné schémy (Zod) | ✅ Prísne typy aj za behu, vyspelé EF Core a SignalR |
-| ✅ Menej prepínania kontextu pre malý tím | ✅ Na Slovensku veľa .NET vývojárov |
-| ❌ Slabší pri ťažkých výpočtoch v CPU (jedno vlákno) | ❌ Frontend aj tak v React/Next.js, teda dva jazyky |
-
-**Odporúčanie:** rozhoduje, čo tím ovláda lepšie. Pri C# je osvedčená kombinácia ASP.NET Core API + Next.js + PostgreSQL, pri TS celý stack v TypeScripte. Na úlohy na pozadí ani na AI to vplyv nemá.
 
 ---
 
 ## Ďalší krok
 
-Po rozhodnutí o jazyku nasleduje kostra projektu: monorepo, Docker Compose, modulárny monolit, worker, PostgreSQL + pgvector, Redis, MinIO a prvá databázová schéma pre Fázu 1.
+Kostra backendu (Fáza 0): `Common`, registrácia modulov, OpenAPI, health check, architektonické testy a Docker pre `api` a `worker`.

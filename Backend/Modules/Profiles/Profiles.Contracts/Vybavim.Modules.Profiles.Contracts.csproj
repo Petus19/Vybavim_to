@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Verejný kontrakt modulu Profiles pre ostatné moduly: rozhrania, DTO, integračné udalosti.
+       Nesmie referencovať žiadny iný projekt. -->
+</Project>

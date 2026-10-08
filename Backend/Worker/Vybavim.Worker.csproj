@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+  <!-- Samostatný proces na úlohy z fronty. Používa rovnaké moduly ako Api. -->
+  <ItemGroup>
+    <ProjectReference Include="../Common/Vybavim.Common.csproj" />
+    <ProjectReference Include="../Modules/Identity/Identity/Vybavim.Modules.Identity.csproj" />
+    <ProjectReference Include="../Modules/Profiles/Profiles/Vybavim.Modules.Profiles.csproj" />
+    <ProjectReference Include="../Modules/Listings/Listings/Vybavim.Modules.Listings.csproj" />
+    <ProjectReference Include="../Modules/Projects/Projects/Vybavim.Modules.Projects.csproj" />
+    <ProjectReference Include="../Modules/Chat/Chat/Vybavim.Modules.Chat.csproj" />
+    <ProjectReference Include="../Modules/Notifications/Notifications/Vybavim.Modules.Notifications.csproj" />
+    <ProjectReference Include="../Modules/Reviews/Reviews/Vybavim.Modules.Reviews.csproj" />
+    <ProjectReference Include="../Modules/Payments/Payments/Vybavim.Modules.Payments.csproj" />
+    <ProjectReference Include="../Modules/Admin/Admin/Vybavim.Modules.Admin.csproj" />
+    <ProjectReference Include="../Modules/Gdpr/Gdpr/Vybavim.Modules.Gdpr.csproj" />
+  </ItemGroup>
+</Project>

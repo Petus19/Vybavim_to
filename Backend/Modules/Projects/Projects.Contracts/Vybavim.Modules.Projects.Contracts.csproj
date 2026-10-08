@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Verejný kontrakt modulu Projects pre ostatné moduly: rozhrania, DTO, integračné udalosti.
+       Nesmie referencovať žiadny iný projekt. -->
+</Project>
