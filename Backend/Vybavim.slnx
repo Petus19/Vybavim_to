@@ -1,0 +1,51 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="global.json" />
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+    <File Path=".editorconfig" />
+  </Folder>
+  <Project Path="Api/Vybavim.Api.csproj" />
+  <Project Path="Worker/Vybavim.Worker.csproj" />
+  <Project Path="Common/Vybavim.Common.csproj" />
+  <Folder Name="/Modules/Identity/">
+    <Project Path="Modules/Identity/Identity/Vybavim.Modules.Identity.csproj" />
+    <Project Path="Modules/Identity/Identity.Contracts/Vybavim.Modules.Identity.Contracts.csproj" />
+  </Folder>
+  <Folder Name="/Modules/Profiles/">
+    <Project Path="Modules/Profiles/Profiles/Vybavim.Modules.Profiles.csproj" />
+    <Project Path="Modules/Profiles/Profiles.Contracts/Vybavim.Modules.Profiles.Contracts.csproj" />
+  </Folder>
+  <Folder Name="/Modules/Listings/">
+    <Project Path="Modules/Listings/Listings/Vybavim.Modules.Listings.csproj" />
+    <Project Path="Modules/Listings/Listings.Contracts/Vybavim.Modules.Listings.Contracts.csproj" />
+  </Folder>
+  <Folder Name="/Modules/Projects/">
+    <Project Path="Modules/Projects/Projects/Vybavim.Modules.Projects.csproj" />
+    <Project Path="Modules/Projects/Projects.Contracts/Vybavim.Modules.Projects.Contracts.csproj" />
+  </Folder>
+  <Folder Name="/Modules/Chat/">
+    <Project Path="Modules/Chat/Chat/Vybavim.Modules.Chat.csproj" />
+    <Project Path="Modules/Chat/Chat.Contracts/Vybavim.Modules.Chat.Contracts.csproj" />
+  </Folder>
+  <Folder Name="/Modules/Notifications/">
+    <Project Path="Modules/Notifications/Notifications/Vybavim.Modules.Notifications.csproj" />
+    <Project Path="Modules/Notifications/Notifications.Contracts/Vybavim.Modules.Notifications.Contracts.csproj" />
+  </Folder>
+  <Folder Name="/Modules/Reviews/">
+    <Project Path="Modules/Reviews/Reviews/Vybavim.Modules.Reviews.csproj" />
+    <Project Path="Modules/Reviews/Reviews.Contracts/Vybavim.Modules.Reviews.Contracts.csproj" />
+  </Folder>
+  <Folder Name="/Modules/Payments/">
+    <Project Path="Modules/Payments/Payments/Vybavim.Modules.Payments.csproj" />
+    <Project Path="Modules/Payments/Payments.Contracts/Vybavim.Modules.Payments.Contracts.csproj" />
+  </Folder>
+  <Folder Name="/Modules/Admin/">
+    <Project Path="Modules/Admin/Admin/Vybavim.Modules.Admin.csproj" />
+    <Project Path="Modules/Admin/Admin.Contracts/Vybavim.Modules.Admin.Contracts.csproj" />
+  </Folder>
+  <Folder Name="/Modules/Gdpr/">
+    <Project Path="Modules/Gdpr/Gdpr/Vybavim.Modules.Gdpr.csproj" />
+    <Project Path="Modules/Gdpr/Gdpr.Contracts/Vybavim.Modules.Gdpr.Contracts.csproj" />
+  </Folder>
+</Solution>
