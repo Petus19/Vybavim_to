@@ -2,9 +2,9 @@
 # Prihlasovacie údaje nižšie sú iba pre lokálny vývoj.
 
 services:
-  # --- Aplikácie (doplnia sa po rozhodnutí o jazyku backendu) ---
+  # --- Aplikácie (doplnia sa s kostrou backendu vo Fáze 0) ---
   # web:         # Next.js – frontend
-  # api:         # NestJS / ASP.NET Core – REST API + WebSockety
+  # api:         # ASP.NET Core – REST API + WebSockety
   # worker:      # rovnaký kód ako api – úlohy z fronty
   # ai-service:  # Python / FastAPI (neskôr)
 
