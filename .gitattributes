@@ -1,0 +1,19 @@
+# Jednotné konce riadkov (LF) na macOS aj Windows.
+# Bez toho by Windows ukladal CRLF a skripty v Docker kontajneroch (Linux) by padali.
+* text=auto eol=lf
+
+# Windows skripty potrebujú CRLF
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Binárne súbory – git ich nemá meniť ani porovnávať po riadkoch
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+*.zip binary
