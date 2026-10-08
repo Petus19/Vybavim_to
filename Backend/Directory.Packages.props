@@ -1,0 +1,8 @@
+<Project>
+  <!-- Centrálne verzie NuGet balíkov: v .csproj sa uvádza iba <PackageReference Include="..." /> bez verzie -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+  <ItemGroup>
+  </ItemGroup>
+</Project>

@@ -2,4 +2,4 @@
 
 Mobilná aplikácia: **React Native / Expo** nad existujúcim API.
 
-Rovnako ako web volá API cez typovaného klienta z [`Shared/`](../../Shared/README.md).
+Rovnako ako web volá API cez typovaného klienta z [`Shared/`](../Shared/README.md).

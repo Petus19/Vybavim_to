@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Implementácia modulu Chat. Všetky typy sú internal, okrem registrácie modulu.
+       Iné moduly referencovať iba cez ich .Contracts projekt. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../Common/Vybavim.Common.csproj" />
+    <ProjectReference Include="../Chat.Contracts/Vybavim.Modules.Chat.Contracts.csproj" />
+  </ItemGroup>
+</Project>
