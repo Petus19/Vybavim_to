@@ -19,6 +19,60 @@ Vybavím to je **dvojstranný marketplace**: na jednej strane sú zadávatelia p
 
 ---
 
+## Ako začať
+
+Vyvíjame na macOS aj Windows. Rovnaké prostredie zabezpečuje git: verzie nástrojov aj Docker image sú zafixované v repozitári, nič sa nenastavuje ručne.
+
+### 1. Nainštaluj nástroje
+
+| Nástroj | macOS | Windows |
+|---|---|---|
+| Docker Desktop (aktuálna verzia) | `brew install --cask docker-desktop` | `winget install Docker.DockerDesktop` (vyžaduje WSL2: `wsl --install`) |
+| .NET SDK 10 (verzia v `Backend/global.json`) | `brew install --cask dotnet-sdk` | `winget install Microsoft.DotNet.SDK.10` |
+| Node.js cez `fnm` (verzia v `.nvmrc`, pribudne s projektom `Web`) | `brew install fnm` | `winget install Schniz.fnm` |
+| Git | `brew install git` | `winget install Git.Git` |
+
+Potom raz nastav dôveryhodný HTTPS certifikát pre lokálny vývoj:
+
+```bash
+dotnet dev-certs https --trust
+```
+
+### 2. Naklonuj repozitár
+
+```bash
+git clone https://github.com/Petus19/Vybavim_to.git
+```
+
+Na Windowse ideálne do priečinka bez diakritiky a medzier, napr. `C:\dev\Vybavim_to`.
+
+### 3. Spusti infraštruktúru
+
+```bash
+docker compose up -d
+```
+
+Spustí PostgreSQL, Redis, RustFS a Mailpit. Adresy a prihlasovacie údaje sú v časti [Docker](#docker). Ak je niektorý port obsadený, skopíruj `.env.example` do `.env` a port v ňom zmeň.
+
+### 4. Skompiluj backend
+
+```bash
+cd Backend
+dotnet build
+```
+
+### Bežná práca
+
+| Situácia | Príkaz |
+|---|---|
+| Po `git pull` (mohlo sa zmeniť prostredie) | `docker compose up -d --build` |
+| Vypnutie (dáta zostanú) | `docker compose down` |
+| Reset – zmaže lokálnu DB a súbory | `docker compose down -v` |
+
+Databázu si nezdieľame, každý má vlastnú. Rovnakú schému a dáta zabezpečia migrácie a seed s mock dátami.
+
+---
+
 ## Technologický stack
 
 | Vrstva | Voľba | Prečo |
@@ -29,7 +83,7 @@ Vybavím to je **dvojstranný marketplace**: na jednej strane sú zadávatelia p
 | Databáza | **PostgreSQL** + PostGIS + pgvector | Relačné dáta, fulltext, lokalita, embeddingy pre AI |
 | ORM | **EF Core** + Npgsql | Typovo bezpečný prístup k dátam a migrácie |
 | Cache a fronty | **Redis** | Fronta úloh, real-time (pub/sub), cache, sessions |
-| Súbory | **MinIO** (v produkcii S3) | Portfóliá, prílohy v chate, logá firiem |
+| Súbory | **S3** (lokálne RustFS) | Portfóliá, prílohy v chate, logá firiem |
 | Real-time | **SignalR** | Chat a notifikácie |
 | Autentifikácia | E-mail + Google/Apple (OAuth) | Access + refresh token pre web aj mobil |
 | Platby | **Stripe** (neskôr Stripe Connect) | Predplatné, topovanie, faktúry, neskôr escrow |
@@ -55,14 +109,14 @@ flowchart TB
 
     db[("PostgreSQL<br/>PostGIS · pgvector")]
     redis[("Redis<br/>fronta · pub/sub · cache")]
-    minio[("MinIO<br/>súbory")]
+    storage[("S3 / RustFS<br/>súbory")]
     worker["Worker(s)<br/>e-maily · PDF · obrázky · Stripe · cron"]
     ai["ai-service<br/>Python · FastAPI (neskôr)"]
 
     web -->|REST + WebSocket| api
     mobile -->|REST + WebSocket| api
     api --> db
-    api --> minio
+    api --> storage
     api -->|udalosti| redis
     redis --> worker
     worker --> db
@@ -215,9 +269,23 @@ Vybavim_to/
 | `worker` | rovnaký kód ako `api` | Úlohy z fronty, škáluje sa samostatne |
 | `db` | `postgres:17` + PostGIS + pgvector | Hlavná databáza |
 | `redis` | `redis:7` | Fronta úloh, real-time, cache |
-| `minio` | MinIO | S3-kompatibilné úložisko súborov |
+| `storage` | `rustfs/rustfs` (v produkcii S3) | S3-kompatibilné úložisko súborov |
 | `mailpit` | Mailpit | Zachytávanie e-mailov pri vývoji |
 | `ai-service` | Python / FastAPI | AI a ML *(neskôr)* |
+
+> MinIO už nezverejňuje Docker image komunitnej verzie, preto lokálne používame RustFS (Apache 2.0). S3 klient v backende musí mať zapnuté `ForcePathStyle = true`.
+
+**Lokálny vývoj** (`docker compose up -d`):
+
+| Služba | Adresa | Prihlásenie |
+|---|---|---|
+| PostgreSQL | `localhost:5432`, databáza `vybavim` | `vybavim` / `vybavim` |
+| Redis | `localhost:6379` | – |
+| RustFS S3 API | `http://localhost:9000` | `vybavim` / `vybavim-dev` |
+| RustFS konzola | http://localhost:9001/rustfs/console/ | `vybavim` / `vybavim-dev` |
+| Mailpit | http://localhost:8025, SMTP `localhost:2525` | – |
+
+Ak je niektorý port na počítači obsadený, zmeň ho v súbore `.env` (je mimo gitu): `DB_PORT`, `REDIS_PORT`, `STORAGE_PORT`, `STORAGE_CONSOLE_PORT`, `SMTP_PORT`, `MAILPIT_PORT`.
 
 **Škálovanie neskôr bez prepisovania:**
 
@@ -233,12 +301,14 @@ Vybavim_to/
 ### Fáza 0: základ
 
 - [x] Štruktúra solution: projekty `Api`, `Worker`, `Common`, moduly s `.Contracts`, spoločné nastavenia
+- [x] Lokálna infraštruktúra v Docker Compose: PostgreSQL + PostGIS + pgvector, Redis, RustFS, Mailpit; zafixované verzie, nastaviteľné porty
 - [ ] Kostra backendu: `Common` (konfigurácia, DB, auth, chyby, logovanie), registrácia modulov, OpenAPI, health check
 - [ ] Testy: architektonické testy hraníc modulov, Testcontainers pre integračné testy
 - [ ] Docker: Dockerfile pre `api` a `worker`, doplnenie do `docker-compose.yml`
 - [ ] CI (GitHub Actions): build, testy, formátovanie (`dotnet format`), build Docker images
 - [ ] Fronta a outbox: výber Hangfire / Wolverine
 - [ ] Návrh DB schémy: `users`, `profiles`, `categories`, `listings`, `applications`, `projects`, `messages`, `reviews`
+- [ ] Mock dáta pre vývoj: seeder s pevným seedom (Bogus), testovacie účty, nikdy nebeží v produkcii
 - [ ] Zber udalostí (analytika) od prvého dňa ako podklad pre budúce ML
 
 ### Fáza 1: MVP

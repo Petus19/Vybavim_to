@@ -1,5 +1,7 @@
 # Vývojové prostredie – spustenie: docker compose up -d
 # Prihlasovacie údaje nižšie sú iba pre lokálny vývoj.
+# Porty na localhoste sa dajú zmeniť v súbore .env (vzor: .env.example), ak sú na počítači obsadené.
+# Verzie image sú zafixované, aby sme mali všetci rovnaké prostredie – meniť iba vedome cez PR.
 
 services:
   # --- Aplikácie (doplnia sa s kostrou backendu vo Fáze 0) ---
@@ -13,7 +15,7 @@ services:
     build:
       context: .
       dockerfile_inline: |
-        FROM postgres:17
+        FROM postgres:17.11
         RUN apt-get update \
          && apt-get install -y --no-install-recommends postgresql-17-postgis-3 postgresql-17-pgvector \
          && rm -rf /var/lib/apt/lists/*
@@ -22,7 +24,7 @@ services:
       POSTGRES_PASSWORD: vybavim
       POSTGRES_DB: vybavim
     ports:
-      - "5432:5432"
+      - "${DB_PORT:-5432}:5432"
     volumes:
       - db-data:/var/lib/postgresql/data
     healthcheck:
@@ -32,31 +34,33 @@ services:
       retries: 10
 
   redis:
-    image: redis:7
+    image: redis:7.4.11
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     volumes:
       - redis-data:/data
 
-  minio:
-    image: minio/minio
-    command: server /data --console-address ":9001"
+  storage: # RustFS – S3-kompatibilné úložisko súborov (v produkcii S3)
+    image: rustfs/rustfs:1.0.1
     environment:
-      MINIO_ROOT_USER: vybavim
-      MINIO_ROOT_PASSWORD: vybavim-dev
+      RUSTFS_ACCESS_KEY: vybavim
+      RUSTFS_SECRET_KEY: vybavim-dev
+      RUSTFS_ADDRESS: ":9000"
+      RUSTFS_CONSOLE_ENABLE: "true"
+      RUSTFS_CONSOLE_ADDRESS: ":9001"
     ports:
-      - "9000:9000" # S3 API
-      - "9001:9001" # webová konzola
+      - "${STORAGE_PORT:-9000}:9000" # S3 API
+      - "${STORAGE_CONSOLE_PORT:-9001}:9001" # webová konzola
     volumes:
-      - minio-data:/data
+      - storage-data:/data
 
   mailpit:
-    image: axllent/mailpit
+    image: axllent/mailpit:v1.31.4
     ports:
-      - "1025:1025" # SMTP
-      - "8025:8025" # webové rozhranie
+      - "${SMTP_PORT:-2525}:1025" # SMTP (nie 1025 – ten na Macu obsadzuje napr. Synology Drive)
+      - "${MAILPIT_PORT:-8025}:8025" # webové rozhranie
 
 volumes:
   db-data:
   redis-data:
-  minio-data:
+  storage-data:
