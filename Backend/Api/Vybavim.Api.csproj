@@ -13,4 +13,9 @@
     <ProjectReference Include="../Modules/Admin/Admin/Vybavim.Modules.Admin.csproj" />
     <ProjectReference Include="../Modules/Gdpr/Gdpr/Vybavim.Modules.Gdpr.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <!-- Potrebné pre príkaz "dotnet ef" (vytváranie migrácií). Do výslednej aplikácie sa nedostane. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
+  </ItemGroup>
 </Project>
