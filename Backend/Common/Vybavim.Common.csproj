@@ -3,4 +3,11 @@
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
+
+  <ItemGroup>
+    <!-- EF Core + ovládač pre PostgreSQL. Moduly ich dostanú automaticky cez referenciu na Common. -->
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <!-- C# názvy (CategoryId) → názvy v databáze (category_id) -->
+    <PackageReference Include="EFCore.NamingConventions" />
+  </ItemGroup>
 </Project>
