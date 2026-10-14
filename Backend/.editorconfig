@@ -17,3 +17,7 @@ dotnet_style_require_accessibility_modifiers = always:warning
 csharp_style_var_for_built_in_types = true:suggestion
 csharp_style_var_when_type_is_apparent = true:suggestion
 dotnet_sort_system_directives_first = true
+
+# Migrácie generuje EF Core (dotnet ef) – analyzátory ich nekontrolujú
+[**/Migrations/*.cs]
+generated_code = true
