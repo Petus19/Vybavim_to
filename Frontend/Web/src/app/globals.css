@@ -1,0 +1,124 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/*
+ * Tmavý režim podľa atribútu data-theme na <html>. Nastavuje ho skript v layout.tsx
+ * (pred vykreslením) a prepínač vzhľadu – podľa voľby používateľa alebo systému.
+ */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/*
+ * Dizajn podľa princípov Apple Human Interface Guidelines:
+ * neutrálne plochy, jedna akcentová farba (zelená značky), veľa priestoru,
+ * karty bez rámčekov odlíšené jemným sivým pozadím, tlačidlá v tvare piluliek.
+ * Oranžová sa používa iba v logu.
+ */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-inter);
+  --font-heading: var(--font-inter);
+
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-check: var(--brand-check);
+  --color-brand-orange: var(--brand-orange);
+  --color-surface: var(--surface);
+
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  --brand: #0f6e56;
+  --brand-foreground: #ffffff;
+  --brand-check: #1d9e75;
+  --brand-orange: #d85a30;
+
+  --background: #ffffff;
+  /* sivá plocha sekcií a kariet (Apple: #f5f5f7) */
+  --surface: #f5f5f7;
+  --foreground: #1d1d1f;
+  --card: #f5f5f7;
+  --card-foreground: #1d1d1f;
+  --popover: #ffffff;
+  --popover-foreground: #1d1d1f;
+  --primary: #0f6e56;
+  --primary-foreground: #ffffff;
+  --secondary: #e8e8ed;
+  --secondary-foreground: #1d1d1f;
+  --muted: #f5f5f7;
+  --muted-foreground: #6e6e73;
+  --accent: #e8e8ed;
+  --accent-foreground: #1d1d1f;
+  --destructive: #d70015;
+  --border: #d2d2d7;
+  --input: #d2d2d7;
+  --ring: #1d9e75;
+  --radius: 0.75rem;
+}
+
+:root[data-theme="dark"] {
+  --brand: #5dcaa5;
+  --brand-foreground: #04342c;
+  --brand-check: #5dcaa5;
+  --brand-orange: #f0997b;
+
+  --background: #000000;
+  --surface: #1c1c1e;
+  --foreground: #f5f5f7;
+  --card: #1c1c1e;
+  --card-foreground: #f5f5f7;
+  --popover: #1c1c1e;
+  --popover-foreground: #f5f5f7;
+  --primary: #5dcaa5;
+  --primary-foreground: #04342c;
+  --secondary: #2c2c2e;
+  --secondary-foreground: #f5f5f7;
+  --muted: #1c1c1e;
+  --muted-foreground: #a1a1a6;
+  --accent: #2c2c2e;
+  --accent-foreground: #f5f5f7;
+  --destructive: #ff6961;
+  --border: #38383a;
+  --input: #48484a;
+  --ring: #5dcaa5;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  html {
+    @apply font-sans;
+  }
+}
