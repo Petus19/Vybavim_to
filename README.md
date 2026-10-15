@@ -29,7 +29,7 @@ Vyvíjame na macOS aj Windows. Rovnaké prostredie zabezpečuje git: verzie nás
 |---|---|---|
 | Docker Desktop (aktuálna verzia) | `brew install --cask docker-desktop` | `winget install Docker.DockerDesktop` (vyžaduje WSL2: `wsl --install`) |
 | .NET SDK 10 (verzia v `Backend/global.json`) | `brew install --cask dotnet-sdk` | `winget install Microsoft.DotNet.SDK.10` |
-| Node.js cez `fnm` (verzia v `.nvmrc`, pribudne s projektom `Web`) | `brew install fnm` | `winget install Schniz.fnm` |
+| Node.js cez `fnm` (verzia v `Frontend/Web/.nvmrc`) | `brew install fnm` | `winget install Schniz.fnm` |
 | Git | `brew install git` | `winget install Git.Git` |
 
 Potom raz nastav dôveryhodný HTTPS certifikát pre lokálny vývoj:
@@ -60,6 +60,16 @@ Spustí PostgreSQL, Redis, RustFS a Mailpit. Adresy a prihlasovacie údaje sú v
 cd Backend
 dotnet build
 ```
+
+### 5. Spusti web
+
+```bash
+cd Frontend/Web
+npm install
+npm run dev
+```
+
+Web beží na http://localhost:3000 (zatiaľ na mock dátach). Podrobnosti sú vo [`Frontend/Web/README.md`](Frontend/Web/README.md).
 
 ### Bežná práca
 
