@@ -1,7 +1,10 @@
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Vybavim.Common.Database;
 using Vybavim.Common.Extensions;
+using Vybavim.Modules.Listings.Application;
+using Vybavim.Modules.Listings.Endpoints;
 using Vybavim.Modules.Listings.Infrastructure;
 using Vybavim.Modules.Listings.Infrastructure.Seeding;
 
@@ -13,13 +16,23 @@ namespace Vybavim.Modules.Listings;
 /// </summary>
 public static class ListingsModule
 {
+    /// <summary>Zaregistruje služby modulu (databáza, prípady použitia, testovacie dáta).</summary>
     public static IServiceCollection AddListingsModule(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddModuleDbContext<ListingsDbContext>(configuration, ListingsDbContext.SchemaName);
+
+        // Prípady použitia – endpointy si ich vypýtajú cez Dependency Injection
+        services.AddScoped<GetCategories>();
+        services.AddScoped<SearchListings>();
+        services.AddScoped<GetListingDetail>();
 
         // Testovacie inzeráty – spustí ich Api iba vo vývoji (SeedDevDataAsync).
         services.AddScoped<IDevDataSeeder, ListingsDevSeeder>();
 
         return services;
     }
+
+    /// <summary>Zapne HTTP adresy modulu: /api/v1/categories, /api/v1/listings…</summary>
+    public static IEndpointRouteBuilder MapListingsEndpoints(this IEndpointRouteBuilder app) =>
+        ListingsEndpoints.Map(app);
 }

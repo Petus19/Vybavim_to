@@ -314,6 +314,8 @@ Ak je niektorý port na počítači obsadený, zmeň ho v súbore `.env` (je mim
 - [x] Lokálna infraštruktúra v Docker Compose: PostgreSQL + PostGIS + pgvector, Redis, RustFS, Mailpit; zafixované verzie, nastaviteľné porty
 - [ ] Kostra backendu: `Common` (konfigurácia, DB, auth, chyby, logovanie), registrácia modulov, OpenAPI, health check
   - [x] databáza: `BaseDbContext`, schéma pre každý modul, migrácie pri štarte vo vývoji, registrácia modulu (`AddListingsModule`), health check
+  - [x] jednotné chyby (`Error`, `Result`, ProblemDetails), OpenAPI + dokumentácia `/scalar`, CORS pre web
+  - [x] prvé endpointy: kategórie, vyhľadávanie inzerátov s filtrami ako na webe, detail (pozri [`Backend/Api/README.md`](Backend/Api/README.md))
 - [ ] Testy: architektonické testy hraníc modulov, Testcontainers pre integračné testy
 - [ ] Docker: Dockerfile pre `api` a `worker`, doplnenie do `docker-compose.yml`
 - [ ] CI (GitHub Actions): build, testy, formátovanie (`dotnet format`), build Docker images
