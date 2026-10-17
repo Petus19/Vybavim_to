@@ -29,6 +29,12 @@ namespace Vybavim.Modules.Listings.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("description");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -60,6 +66,40 @@ namespace Vybavim.Modules.Listings.Infrastructure.Migrations
                         .HasDatabaseName("ix_categories_slug");
 
                     b.ToTable("categories", "listings");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("019a0b2c-1000-7000-8000-000000000001"),
+                            Description = "Weby, e-shopy, mobilné appky",
+                            Name = "Web a aplikácie",
+                            Slug = "web",
+                            SortOrder = 1
+                        },
+                        new
+                        {
+                            Id = new Guid("019a0b2c-1000-7000-8000-000000000002"),
+                            Description = "Logá, vizuály, tlačoviny",
+                            Name = "Grafika a logo",
+                            Slug = "grafika",
+                            SortOrder = 2
+                        },
+                        new
+                        {
+                            Id = new Guid("019a0b2c-1000-7000-8000-000000000003"),
+                            Description = "Siete, počítače, servery",
+                            Name = "IT podpora",
+                            Slug = "it-podpora",
+                            SortOrder = 3
+                        },
+                        new
+                        {
+                            Id = new Guid("019a0b2c-1000-7000-8000-000000000004"),
+                            Description = "Reklamy, sociálne siete, SEO",
+                            Name = "Online marketing",
+                            Slug = "marketing",
+                            SortOrder = 4
+                        });
                 });
 
             modelBuilder.Entity("Vybavim.Modules.Listings.Domain.Listing", b =>
@@ -68,10 +108,16 @@ namespace Vybavim.Modules.Listings.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<decimal>("BudgetAmount")
+                    b.Property<decimal?>("BudgetAmount")
                         .HasPrecision(12, 2)
                         .HasColumnType("numeric(12,2)")
                         .HasColumnName("budget_amount");
+
+                    b.Property<string>("BudgetType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("budget_type");
 
                     b.Property<Guid>("CategoryId")
                         .HasColumnType("uuid")
@@ -97,15 +143,62 @@ namespace Vybavim.Modules.Listings.Infrastructure.Migrations
                         .HasColumnType("date")
                         .HasColumnName("deadline");
 
+                    b.PrimitiveCollection<string[]>("Deliverables")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("deliverables");
+
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasMaxLength(5000)
                         .HasColumnType("character varying(5000)")
                         .HasColumnName("description");
 
+                    b.Property<string>("Engagement")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("engagement");
+
+                    b.Property<string>("EstimatedDuration")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("estimated_duration");
+
+                    b.Property<bool>("InvoiceRequired")
+                        .HasColumnType("boolean")
+                        .HasColumnName("invoice_required");
+
+                    b.Property<string>("Level")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("level");
+
                     b.Property<Guid>("OwnerId")
                         .HasColumnType("uuid")
                         .HasColumnName("owner_id");
+
+                    b.Property<bool>("Remote")
+                        .HasColumnType("boolean")
+                        .HasColumnName("remote");
+
+                    b.PrimitiveCollection<string[]>("Requirements")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("requirements");
+
+                    b.Property<string>("Size")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("size");
+
+                    b.PrimitiveCollection<string[]>("Skills")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("skills");
 
                     b.Property<string>("Status")
                         .IsRequired()
