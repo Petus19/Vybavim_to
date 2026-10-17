@@ -313,12 +313,15 @@ Ak je niektorý port na počítači obsadený, zmeň ho v súbore `.env` (je mim
 - [x] Štruktúra solution: projekty `Api`, `Worker`, `Common`, moduly s `.Contracts`, spoločné nastavenia
 - [x] Lokálna infraštruktúra v Docker Compose: PostgreSQL + PostGIS + pgvector, Redis, RustFS, Mailpit; zafixované verzie, nastaviteľné porty
 - [ ] Kostra backendu: `Common` (konfigurácia, DB, auth, chyby, logovanie), registrácia modulov, OpenAPI, health check
+  - [x] databáza: `BaseDbContext`, schéma pre každý modul, migrácie pri štarte vo vývoji, registrácia modulu (`AddListingsModule`), health check
 - [ ] Testy: architektonické testy hraníc modulov, Testcontainers pre integračné testy
 - [ ] Docker: Dockerfile pre `api` a `worker`, doplnenie do `docker-compose.yml`
 - [ ] CI (GitHub Actions): build, testy, formátovanie (`dotnet format`), build Docker images
 - [ ] Fronta a outbox: výber Hangfire / Wolverine
 - [ ] Návrh DB schémy: `users`, `profiles`, `categories`, `listings`, `applications`, `projects`, `messages`, `reviews`
+  - [x] `listings.categories` (4 kategórie ako referenčné dáta v migrácii) a `listings.listings` (model zhodný s webom)
 - [ ] Mock dáta pre vývoj: seeder s pevným seedom (Bogus), testovacie účty, nikdy nebeží v produkcii
+  - [x] mechanizmus `IDevDataSeeder` + 12 testovacích inzerátov zhodných s mock dátami webu
 - [ ] Zber udalostí (analytika) od prvého dňa ako podklad pre budúce ML
 
 ### Fáza 1: MVP

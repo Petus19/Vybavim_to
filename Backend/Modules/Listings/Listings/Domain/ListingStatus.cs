@@ -1,14 +1,21 @@
 namespace Vybavim.Modules.Listings.Domain;
 
 /// <summary>
-/// Stav inzerátu. Priebeh samotnej práce (prebieha / dokončený) eviduje modul Projects,
-/// inzerát iba hovorí, či ešte prijíma odpovede.
+/// Životný cyklus inzerátu: Open → InProgress → Completed, alebo Open → Cancelled.
+/// Samotnú prácu (dohoda, chat, odovzdanie) riadi modul Projects;
+/// inzerát si podľa jeho udalostí iba prepne stav.
 /// </summary>
 internal enum ListingStatus
 {
     /// <summary>Zverejnený, prijíma odpovede.</summary>
     Open,
 
-    /// <summary>Uzavretý: zadávateľ si vybral odborníka alebo inzerát stiahol.</summary>
-    Closed,
+    /// <summary>Zadávateľ si vybral odborníka a pracuje sa.</summary>
+    InProgress,
+
+    /// <summary>Práca je hotová.</summary>
+    Completed,
+
+    /// <summary>Zadávateľ inzerát stiahol.</summary>
+    Cancelled,
 }
