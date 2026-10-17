@@ -51,4 +51,18 @@ public static class DatabaseExtensions
             await migrator.MigrateAsync(cancellationToken);
         }
     }
+
+    /// <summary>
+    /// Spustí seedery testovacích dát všetkých modulov. Volá sa pri štarte Api
+    /// IBA vo vývojovom prostredí, vždy až po <see cref="MigrateDatabasesAsync"/>.
+    /// </summary>
+    public static async Task SeedDevDataAsync(this IHost host, CancellationToken cancellationToken = default)
+    {
+        await using var scope = host.Services.CreateAsyncScope();
+
+        foreach (var seeder in scope.ServiceProvider.GetServices<IDevDataSeeder>())
+        {
+            await seeder.SeedAsync(cancellationToken);
+        }
+    }
 }
