@@ -1,0 +1,22 @@
+<Project>
+  <!-- Spoločné nastavenia pre všetky testovacie projekty v Backend/Tests/.
+       Najprv načíta nastavenia z Backend/Directory.Build.props (.NET 10, nullable…). -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <!-- xUnit v3: testovací projekt je samostatne spustiteľný program.
+         Spúšťa ho Microsoft.Testing.Platform (zapnuté v Backend/global.json). -->
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- V každom teste je automaticky dostupné Xunit (Fact, Theory, Assert) -->
+    <Using Include="Xunit" />
+  </ItemGroup>
+</Project>

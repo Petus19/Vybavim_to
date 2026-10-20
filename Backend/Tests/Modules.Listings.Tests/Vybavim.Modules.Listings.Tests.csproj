@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Unit testy modulu Listings: doména a pravidlá, bez databázy.
+       Vidí aj internal typy modulu (InternalsVisibleTo v Backend/Directory.Build.props). -->
+  <ItemGroup>
+    <ProjectReference Include="../../Modules/Listings/Listings/Vybavim.Modules.Listings.csproj" />
+  </ItemGroup>
+</Project>
