@@ -316,9 +316,10 @@ Ak je niektorý port na počítači obsadený, zmeň ho v súbore `.env` (je mim
   - [x] databáza: `BaseDbContext`, schéma pre každý modul, migrácie pri štarte vo vývoji, registrácia modulu (`AddListingsModule`), health check
   - [x] jednotné chyby (`Error`, `Result`, ProblemDetails), OpenAPI + dokumentácia `/scalar`, CORS pre web
   - [x] prvé endpointy: kategórie, vyhľadávanie inzerátov s filtrami ako na webe, detail (pozri [`Backend/Api/README.md`](Backend/Api/README.md))
-- [ ] Testy: architektonické testy hraníc modulov, Testcontainers pre integračné testy
+- [x] Testy: unit testy domény, architektonické testy hraníc modulov, integračné testy API s Testcontainers (pozri [`Backend/Tests/README.md`](Backend/Tests/README.md))
 - [ ] Docker: Dockerfile pre `api` a `worker`, doplnenie do `docker-compose.yml`
 - [ ] CI (GitHub Actions): build, testy, formátovanie (`dotnet format`), build Docker images
+  - [x] build a testy backendu, lint + typy + build webu pri každom PR (`.github/workflows/ci.yml`)
 - [ ] Fronta a outbox: výber Hangfire / Wolverine
 - [ ] Návrh DB schémy: `users`, `profiles`, `categories`, `listings`, `applications`, `projects`, `messages`, `reviews`
   - [x] `listings.categories` (4 kategórie ako referenčné dáta v migrácii) a `listings.listings` (model zhodný s webom)
