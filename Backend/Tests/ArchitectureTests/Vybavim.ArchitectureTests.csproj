@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Architektonické testy: kontrolujú pravidlá štruktúry (hranice modulov, internal, vrstvy).
+       Referencia na Api prinesie do výstupu všetky moduly, Contracts aj Common. -->
+  <ItemGroup>
+    <ProjectReference Include="../../Api/Vybavim.Api.csproj" />
+  </ItemGroup>
+</Project>

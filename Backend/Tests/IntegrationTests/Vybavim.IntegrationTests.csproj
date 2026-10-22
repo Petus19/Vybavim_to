@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Integračné testy: celé Api proti skutočnému PostgreSQL, ktorý si testy spustia
+       v dočasnom Docker kontajneri (Testcontainers). Vyžadujú bežiaci Docker. -->
+  <ItemGroup>
+    <ProjectReference Include="../../Api/Vybavim.Api.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Spustí Api v pamäti testu a dá nám HttpClient, ktorým ho voláme -->
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <!-- Dočasný PostgreSQL v Dockeri -->
+    <PackageReference Include="Testcontainers.PostgreSql" />
+  </ItemGroup>
+</Project>
