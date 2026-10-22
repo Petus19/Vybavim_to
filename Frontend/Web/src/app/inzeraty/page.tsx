@@ -5,6 +5,7 @@ import { ChevronDown, Search } from "lucide-react";
 import { ListingCard, ListingCardSkeleton } from "@/components/listing-card";
 import { ChevronLink } from "@/components/chevron-link";
 import { FiltersDisclosure } from "@/components/filters-disclosure";
+import { Pagination } from "@/components/pagination";
 import { SearchForm } from "@/components/search-form";
 import {
   getCategories,
@@ -386,38 +387,6 @@ function EmptyState({ title, text }: { title: string; text: string }) {
         Zobraziť všetky inzeráty
       </ChevronLink>
     </div>
-  );
-}
-
-/** Stránkovanie: Predchádzajúca · Strana 2 z 5 · Ďalšia (zobrazí sa, iba ak je viac strán). */
-function Pagination({
-  page,
-  pageCount,
-  href,
-}: {
-  page: number;
-  pageCount: number;
-  href: (page: number) => string;
-}) {
-  if (pageCount <= 1) return null;
-  return (
-    <nav aria-label="Stránkovanie" className="mt-10 flex items-center justify-center gap-6 text-sm">
-      {page > 1 ? (
-        <ChevronLink href={href(page - 1)} back>
-          Predchádzajúca
-        </ChevronLink>
-      ) : (
-        <span className="w-28" />
-      )}
-      <span className="text-muted-foreground">
-        Strana {page} z {pageCount}
-      </span>
-      {page < pageCount ? (
-        <ChevronLink href={href(page + 1)}>Ďalšia</ChevronLink>
-      ) : (
-        <span className="w-28" />
-      )}
-    </nav>
   );
 }
 
