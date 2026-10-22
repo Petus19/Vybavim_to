@@ -20,7 +20,8 @@ export default function OfferPage(props: PageProps<"/inzeraty/[id]/ponuka">) {
 async function Offer({ params }: { params: PageProps<"/inzeraty/[id]/ponuka">["params"] }) {
   const { id } = await params;
   const user = await requireUser(`/inzeraty/${id}/ponuka`);
-  const listing = await getListing(id);
+  // Bez tokenu, ako verejnosť – na stiahnutý inzerát sa ponuka poslať nedá (404)
+  const listing = await getListing(id, null);
   if (!listing) notFound();
 
   return (

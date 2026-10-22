@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { client } from "@/lib/api";
+import { client, problemTitle } from "@/lib/api";
 import { clearTokens, safeReturnPath, saveTokens } from "@/lib/auth";
 
 /** Stav formulára pre `useActionState`: chyba na zobrazenie a vyplnený e-mail (aby sa nestratil). */
@@ -12,12 +12,6 @@ const UNAVAILABLE = "Prihlásenie teraz nefunguje. Skús to o chvíľu znova.";
 function text(formData: FormData, name: string) {
   const value = formData.get(name);
   return typeof value === "string" ? value.trim() : "";
-}
-
-/** Chybová hláška z API (ProblemDetails `title`) – API ich vracia po slovensky. */
-function problemTitle(error: unknown, fallback: string) {
-  const title = (error as { title?: unknown } | undefined)?.title;
-  return typeof title === "string" && title ? title : fallback;
 }
 
 /** Prihlási cez API a uloží tokeny. Vráti chybu na zobrazenie alebo `null` pri úspechu. */
