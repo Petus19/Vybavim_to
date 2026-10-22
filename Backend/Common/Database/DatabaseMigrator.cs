@@ -18,7 +18,7 @@ public interface IDatabaseMigrator
 /// </summary>
 internal sealed partial class DatabaseMigrator<TContext>(TContext context, ILogger<DatabaseMigrator<TContext>> logger)
     : IDatabaseMigrator
-    where TContext : BaseDbContext
+    where TContext : DbContext, IModuleDbContext
 {
     public async Task MigrateAsync(CancellationToken cancellationToken = default)
     {

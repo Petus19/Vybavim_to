@@ -334,6 +334,8 @@ Ak je niektorý port na počítači obsadený, zmeň ho v súbore `.env` (je mim
 ### Fáza 1: MVP
 
 - [ ] Používateľské účty: registrácia, prihlásenie (e-mail + Google), profil jednotlivca / firmy
+  - [x] ASP.NET Core Identity: registrácia a prihlásenie e-mailom alebo menom, tokeny (access + refresh), role (Admin), `ICurrentUser` pre moduly, testovací admin vo vývoji
+  - [ ] overenie e-mailu a zabudnuté heslo (potrebuje frontu úloh), prihlásenie cez Google, profily
 - [ ] Inzeráty: pridanie a zoznam
 - [ ] Vyhľadávanie a filtre: kategória, cena, lokalita
 - [ ] Odpovede na inzerát a interný chat

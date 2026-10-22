@@ -20,7 +20,7 @@ public static class DatabaseExtensions
         this IServiceCollection services,
         IConfiguration configuration,
         string schema)
-        where TContext : BaseDbContext
+        where TContext : DbContext, IModuleDbContext
     {
         var connectionString = configuration.GetConnectionString(ConnectionStringName)
             ?? throw new InvalidOperationException(

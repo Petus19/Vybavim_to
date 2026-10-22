@@ -17,8 +17,16 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     // Rovnaká verzia PostgreSQL ako v docker-compose.yml
     private readonly PostgreSqlContainer _database = new PostgreSqlBuilder("postgres:17.11").Build();
 
-    /// <summary>Spustí sa raz pred všetkými testami: naštartuje databázu v Dockeri.</summary>
-    public async ValueTask InitializeAsync() => await _database.StartAsync();
+    /// <summary>Spustí sa raz pred všetkými testami: naštartuje databázu v Dockeri a potom Api.</summary>
+    public async ValueTask InitializeAsync()
+    {
+        await _database.StartAsync();
+
+        // Api naštartujeme hneď tu, jedenkrát. Inak by ho spustili až testovacie triedy pri prvom
+        // CreateClient() – a keďže bežia súčasne, Api by sa naštartovalo viackrát naraz
+        // a migrácie aj seed by bežali paralelne (chyby „stĺpec už existuje“, „rola už existuje“).
+        _ = Server;
+    }
 
     /// <summary>Spustí sa raz po všetkých testoch: zastaví Api a zmaže kontajner.</summary>
     public override async ValueTask DisposeAsync()
