@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
   CalendarDays,
@@ -226,12 +227,14 @@ function BudgetCard({ listing }: { listing: Listing }) {
       <p className="text-sm text-muted-foreground">Rozpočet</p>
       <p className="mt-1 text-3xl font-semibold tracking-tight">{formatBudget(listing.budget)}</p>
       {isOpen ? (
-        <button
-          type="button"
-          className="mt-5 h-11 w-full rounded-full bg-primary text-base font-medium text-primary-foreground transition-opacity hover:opacity-90"
+        // Stránka ponuky je iba pre prihlásených – neprihláseného presmeruje na prihlásenie
+        // a po ňom ho vráti späť sem, k posielaniu ponuky.
+        <Link
+          href={`/inzeraty/${listing.id}/ponuka`}
+          className="mt-5 flex h-11 w-full items-center justify-center rounded-full bg-primary text-base font-medium text-primary-foreground transition-opacity hover:opacity-90"
         >
           Poslať ponuku
-        </button>
+        </Link>
       ) : (
         <p className="mt-5 text-sm text-muted-foreground">Inzerát už neprijíma nové ponuky.</p>
       )}

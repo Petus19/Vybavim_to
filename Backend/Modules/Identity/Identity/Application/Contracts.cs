@@ -8,6 +8,9 @@ internal sealed record RegisterRequest(string Email, string Password);
 /// <summary>Prihlásenie: Login je e-mail alebo používateľské meno (napr. "Admin").</summary>
 internal sealed record LoginRequest(string Login, string Password);
 
+/// <summary>Prihlásenie cez Google: ID token, ktorý web dostal od Google po prihlásení používateľa.</summary>
+internal sealed record GoogleLoginRequest(string IdToken);
+
 /// <summary>Obnovenie prístupu: refresh token z prihlásenia.</summary>
 internal sealed record RefreshRequest(string RefreshToken);
 

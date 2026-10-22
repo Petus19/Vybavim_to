@@ -1,6 +1,9 @@
+import { Suspense } from "react";
 import Link from "next/link";
+import { AccountMenu, LoginLink } from "@/components/account-menu";
 import { Logo } from "@/components/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { getCurrentUser } from "@/lib/auth";
 
 export function SiteHeader() {
   return (
@@ -17,9 +20,10 @@ export function SiteHeader() {
           >
             Inzeráty
           </Link>
-          <Link href="/prihlasenie" className="transition-colors hover:text-foreground">
-            Prihlásiť
-          </Link>
+          {/* Kto je prihlásený vieme až z cookie pri požiadavke – zvyšok hlavičky sa zobrazí hneď */}
+          <Suspense fallback={<StaticLoginLink />}>
+            <Account />
+          </Suspense>
           <ThemeToggle />
           <Link
             href="/pridat-inzerat"
@@ -30,5 +34,19 @@ export function SiteHeader() {
         </nav>
       </div>
     </header>
+  );
+}
+
+async function Account() {
+  // Hlavička je na každej stránke – keď API nebeží, radšej ukážeme „Prihlásiť“, než by spadol celý web
+  const user = await getCurrentUser().catch(() => null);
+  return user ? <AccountMenu email={user.email} /> : <LoginLink />;
+}
+
+function StaticLoginLink() {
+  return (
+    <Link href="/prihlasenie" className="transition-colors hover:text-foreground">
+      Prihlásiť
+    </Link>
   );
 }

@@ -180,6 +180,22 @@ public sealed class AuthApiTests(ApiFactory factory)
         Assert.Equal("identity.locked_out", await ErrorCodeAsync(response));
     }
 
+    // --- Prihlásenie cez Google ---
+    // Úspešné prihlásenie potrebuje skutočný ID token od Google, preto sa testuje ručne v prehliadači.
+    // Tu overujeme, že API odmietne všetko, čo nie je platný token pre našu aplikáciu.
+
+    [Theory]
+    [InlineData("nezmysel")]
+    [InlineData("eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIxMjMifQ.podpis")]   // tvarom JWT, ale bez platného podpisu
+    [InlineData("")]
+    public async Task LoginWithGoogle_InvalidToken_Returns401(string idToken)
+    {
+        var response = await PostAsync("/api/v1/auth/google", new { idToken });
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal("identity.invalid_google_token", await ErrorCodeAsync(response));
+    }
+
     // --- Obnovenie tokenu ---
 
     [Fact]
