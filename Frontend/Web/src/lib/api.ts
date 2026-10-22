@@ -31,8 +31,13 @@ export type ListingSearchQuery = NonNullable<
   paths["/api/v1/listings"]["get"]["parameters"]["query"]
 >;
 
-const baseUrl = process.env.API_URL ?? "http://localhost:5080";
-const client = createClient<paths>({ baseUrl });
+export type User = Schemas["UserResponse"];
+export type AccessTokens = Schemas["AccessTokenResponse"];
+
+export const baseUrl = process.env.API_URL ?? "http://localhost:5080";
+
+/** Typovaný klient – používa ho aj `src/lib/auth.ts` pre prihlásenie. */
+export const client = createClient<paths>({ baseUrl });
 
 /** API nebeží alebo vrátilo neočakávanú chybu – zobrazí sa chybová stránka (app/error.tsx). */
 export class ApiUnavailableError extends Error {

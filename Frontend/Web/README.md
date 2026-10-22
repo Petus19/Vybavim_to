@@ -39,12 +39,14 @@ Adresa API sa dá zmeniť v `.env.local` (vzor `.env.example`): `API_URL=http://
 
 ## Stránky
 
-| URL                               | Súbor                            | Obsah                                                                          |
-| --------------------------------- | -------------------------------- | ------------------------------------------------------------------------------ |
-| `/`                               | `src/app/page.tsx`               | úvod: vyhľadávanie, kategórie, najnovšie inzeráty, ako to funguje              |
-| `/inzeraty`                       | `src/app/inzeraty/page.tsx`      | zoznam s vyhľadávaním, kategóriami, panelom „Filtre“ a zoradením               |
-| `/inzeraty/[id]`                  | `src/app/inzeraty/[id]/page.tsx` | detail: fakty v dlaždiciach, výsledky, zručnosti, požiadavky, podobné inzeráty |
-| `/prihlasenie`, `/pridat-inzerat` |                                  | zatiaľ „pripravujeme“                                                          |
+| URL                     | Súbor                            | Obsah                                                                          |
+| ----------------------- | -------------------------------- | ------------------------------------------------------------------------------ |
+| `/`                     | `src/app/page.tsx`               | úvod: vyhľadávanie, kategórie, najnovšie inzeráty, ako to funguje              |
+| `/inzeraty`             | `src/app/inzeraty/page.tsx`      | zoznam s vyhľadávaním, kategóriami, panelom „Filtre“ a zoradením               |
+| `/inzeraty/[id]`        | `src/app/inzeraty/[id]/page.tsx` | detail: fakty v dlaždiciach, výsledky, zručnosti, požiadavky, podobné inzeráty |
+| `/prihlasenie`          | `src/app/prihlasenie/page.tsx`   | prihlásenie a registrácia (záložky, `?rezim=registracia`, `?navrat=`)          |
+| `/inzeraty/[id]/ponuka` | `src/app/inzeraty/[id]/ponuka/`  | poslanie ponuky – **iba prihlásený**, zatiaľ „pripravujeme“                    |
+| `/pridat-inzerat`       | `src/app/pridat-inzerat/`        | pridanie inzerátu – **iba prihlásený**, zatiaľ „pripravujeme“                  |
 
 ### Filtre inzerátov (parametre v URL)
 
@@ -73,6 +75,49 @@ Pevná cena a hodinová sadzba sa **nikdy navzájom neporovnávajú** – rozsah
 - **Počet ponúk** na inzerát – pribudne s odpoveďami na inzeráty (modul Projects).
 - **Zoznam miest** pre filter – je zatiaľ napevno v `src/lib/listings.ts`.
 - Prílohy, otázky pre uchádzačov a polia podľa kategórie (JSONB) – ďalšia verzia.
+
+## Prihlásenie
+
+Prezerať inzeráty môže každý. Prihlásenie sa vyžaduje až **pri akcii** (poslať ponuku, pridať inzerát, neskôr chat a obľúbené) a po ňom sa človek **vráti presne tam, kam smeroval** (`?navrat=`).
+
+| Súbor                             | Čo robí                                                                                                                           |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `src/lib/auth.ts`                 | `getCurrentUser()` (kto je prihlásený, cez `GET /api/v1/auth/me`), `requireUser(navrat)` pre chránené stránky, `safeReturnPath()` |
+| `src/app/prihlasenie/actions.ts`  | Server Actions `login`, `register` (po registrácii rovno prihlási), `logout`                                                      |
+| `src/components/auth-form.tsx`    | formulár s chybami z API a priebežnou kontrolou pravidiel hesla                                                                   |
+| `src/components/account-menu.tsx` | v hlavičke „Prihlásiť“ alebo avatar s menu a odhlásením                                                                           |
+| `src/proxy.ts`                    | keď vyprší access token (1 h), vypýta si od API nový pomocou refresh tokenu (14 dní)                                              |
+| `src/lib/auth-cookies.ts`         | názvy a nastavenia cookies                                                                                                        |
+
+**Tokeny** sú v cookies `vybavim_access` a `vybavim_refresh` s príznakom **httpOnly** – JavaScript v prehliadači sa k nim nedostane, API volá iba server webu. V produkcii majú aj `secure` (iba HTTPS).
+
+**Nová chránená stránka:** komponent v `<Suspense>` zavolá `await requireUser("/adresa-stranky")` – neprihláseného presmeruje na prihlásenie a po ňom ho vráti späť. Vzor je v `src/app/pridat-inzerat/page.tsx`.
+
+**Bezpečnosť:** `navrat` smie byť iba adresa tohto webu (`/…`), cudzie adresy (`//evil.com`, `https://…`) sa ignorujú – odkaz na prihlásenie sa tak nedá zneužiť na presmerovanie na podvodnú stránku.
+
+**Testovací účet:** vo vývoji API vytvorí admina `admin@vybavim.local` (heslo v `Backend/Api/README.md`). Vlastný účet si vytvoríš na `/prihlasenie?rezim=registracia`.
+
+### Prihlásenie cez Google
+
+Tlačidlo **„Pokračovať s Google“** funguje pre prihlásenie aj registráciu (OAuth 2.0 s PKCE):
+
+1. `src/app/prihlasenie/google/route.ts` – presmeruje na Google; do krátkodobej httpOnly cookie uloží náhodný `state`, PKCE verifier a `navrat`
+2. `src/app/prihlasenie/google/callback/route.ts` – overí `state`, vymení kód za ID token (s Client secret), pošle ho do API (`POST /api/v1/auth/google`), uloží naše tokeny a vráti používateľa na `navrat`
+
+Tlačidlo sa zobrazí iba vtedy, keď sú v **`.env.local`** vyplnené `GOOGLE_CLIENT_ID` a `GOOGLE_CLIENT_SECRET` (vzor `.env.example`). **Client secret nikdy nedávaj do gitu** – kolegom ho pošli bezpečne (napr. cez správcu hesiel), nie cez chat alebo e-mail.
+
+Nastavenie v [Google Cloud Console](https://console.cloud.google.com) (projekt _Vybavim-to_ → Google Auth Platform):
+
+- **Clients** → Web application, _Authorized redirect URI_ `http://localhost:3000/prihlasenie/google/callback` (pre produkciu pribudne adresa produkčnej domény)
+- **Audience** → kým je aplikácia v režime _Testing_, prihlásiť sa môžu iba ľudia v zozname **Test users** – nového kolegu treba pridať tam
+
+Prepojenie s existujúcim účtom a vytváranie nových účtov rieši API – pozri `Backend/Api/README.md`, časť „Prihlásenie cez Google“.
+
+### Čo z prihlásenia ešte chýba (backend)
+
+- **Odhlásenie na serveri** – web pri odhlásení zmaže cookies, ale refresh token v API zostáva platný až 14 dní (API nemá endpoint na jeho zneplatnenie).
+- **Zabudnuté heslo, overenie e-mailu, Apple** – tlačidlá pribudnú, keď ich bude vedieť API.
+- **Meno a rola** (zadávateľ / odborník) – patria do modulu Profiles, registrácia má zatiaľ iba e-mail a heslo.
 
 ## Dizajn
 
