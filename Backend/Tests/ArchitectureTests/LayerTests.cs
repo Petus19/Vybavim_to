@@ -15,6 +15,15 @@ public sealed class LayerTests
         ".Application",
     ];
 
+    /// <summary>
+    /// Vedomé výnimky. Microsoft.AspNetCore.Identity obsahuje IdentityUser – model používateľa
+    /// (meno, e-mail, hash hesla), nie HTTP ani databázu. User v module Identity z neho dedí.
+    /// </summary>
+    private static readonly string[] AllowedInDomain =
+    [
+        "Microsoft.AspNetCore.Identity",
+    ];
+
     private const BindingFlags AllMembers =
         BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
 
@@ -37,6 +46,7 @@ public sealed class LayerTests
 
     private static bool IsForbiddenInDomain(Type type) =>
         type.Namespace is { } ns
+        && !AllowedInDomain.Contains(ns)
         && ForbiddenInDomain.Any(forbidden => forbidden.StartsWith('.')
             ? ns.Contains(forbidden, StringComparison.Ordinal)
             : ns.StartsWith(forbidden, StringComparison.Ordinal));

@@ -5,8 +5,10 @@ Spúšťací projekt backendu: REST API (`/api/v1/…`, OpenAPI) + WebSockety (S
 Neobsahuje biznis logiku, iba zapojí spoločné nastavenia a jednotlivé moduly z `Modules/`:
 
 ```csharp
+builder.Services.AddIdentityModule(builder.Configuration);  // Modules/Identity
 builder.Services.AddListingsModule(builder.Configuration);  // Modules/Listings
 
+app.MapIdentityEndpoints();
 app.MapListingsEndpoints();
 ```
 
@@ -26,7 +28,40 @@ API beží na http://localhost:5080. Vo vývoji sa pri štarte aplikujú migrác
 | http://localhost:5080/openapi/v1.json | popis API vo formáte OpenAPI – z neho si web vygeneruje typy |
 | http://localhost:5080/api/v1/health | kontrola, či API beží |
 
-## Endpointy
+## Prihlásenie
+
+Používateľov, heslá a role spravuje **ASP.NET Core Identity** (modul `Identity`, schéma `identity`).
+
+| Metóda | Adresa | Kto | Popis |
+|---|---|---|---|
+| POST | `/api/v1/auth/register` | ktokoľvek | `{ "email", "password" }` → 201 + údaje o používateľovi |
+| POST | `/api/v1/auth/login` | ktokoľvek | `{ "login", "password" }` – login je e-mail alebo meno → tokeny |
+| POST | `/api/v1/auth/refresh` | ktokoľvek | `{ "refreshToken" }` → nové tokeny |
+| GET | `/api/v1/auth/me` | prihlásený | kto som: `id`, `userName`, `email`, `roles` |
+| GET | `/api/v1/users` | iba **Admin** | zoznam všetkých používateľov s rolami |
+
+Odpoveď prihlásenia:
+
+```json
+{ "tokenType": "Bearer", "accessToken": "…", "expiresIn": 3600, "refreshToken": "…" }
+```
+
+- **accessToken** sa posiela v hlavičke `Authorization: Bearer <accessToken>`, platí 1 hodinu.
+- **refreshToken** platí 14 dní a slúži iba na získanie nového accessTokenu (`/auth/refresh`).
+- **Heslo:** aspoň 8 znakov, veľké a malé písmeno, číslica. Po 5 zlých heslách sa účet na 15 minút zablokuje.
+- Chyby: `identity.registration_failed` (400, hláška po slovensky), `identity.invalid_credentials`, `identity.locked_out`, `identity.invalid_refresh_token` (401). Bez tokenu 401, bez oprávnenia 403.
+
+### Testovací admin (iba vo vývoji)
+
+| Meno | E-mail | Heslo | Rola |
+|---|---|---|---|
+| `Admin` | `admin@vybavim.local` | `Admin123` | Admin |
+
+Vytvára ho `IdentityDevSeeder` iba v prostredí Development – **na produkčnom serveri nikdy nevznikne**.
+
+**V Scalar:** zavolaj `POST /api/v1/auth/login`, skopíruj `accessToken`, hore klikni na **Authentication** (Bearer) a vlož ho. Potom fungujú aj chránené endpointy.
+
+## Endpointy inzerátov
 
 | Metóda | Adresa | Popis |
 |---|---|---|

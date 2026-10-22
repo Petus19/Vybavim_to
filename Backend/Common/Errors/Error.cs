@@ -11,6 +11,9 @@ public enum ErrorType
 
     /// <summary>Operácia je v rozpore s aktuálnym stavom → 409 Conflict.</summary>
     Conflict,
+
+    /// <summary>Nesprávne prihlasovacie údaje alebo neplatný token → 401 Unauthorized.</summary>
+    Unauthorized,
 }
 
 /// <summary>
@@ -24,4 +27,6 @@ public sealed record Error(string Code, string Message, ErrorType Type)
     public static Error NotFound(string code, string message) => new(code, message, ErrorType.NotFound);
 
     public static Error Conflict(string code, string message) => new(code, message, ErrorType.Conflict);
+
+    public static Error Unauthorized(string code, string message) => new(code, message, ErrorType.Unauthorized);
 }
