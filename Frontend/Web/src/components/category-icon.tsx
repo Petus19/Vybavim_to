@@ -1,14 +1,22 @@
-import { Code, Laptop, Megaphone, Palette, type LucideProps } from "lucide-react";
-import type { CategoryId } from "@/lib/listings";
+import {
+  Briefcase,
+  Code,
+  Laptop,
+  Megaphone,
+  Palette,
+  type LucideIcon,
+  type LucideProps,
+} from "lucide-react";
 
-const icons = {
+/** Ikony podľa slugu kategórie z API. Nová kategória bez ikony dostane všeobecnú ikonu. */
+const icons: Record<string, LucideIcon> = {
   web: Code,
   grafika: Palette,
   "it-podpora": Laptop,
   marketing: Megaphone,
-} satisfies Record<CategoryId, unknown>;
+};
 
-export function CategoryIcon({ category, ...props }: { category: CategoryId } & LucideProps) {
-  const Icon = icons[category];
+export function CategoryIcon({ category, ...props }: { category: string } & LucideProps) {
+  const Icon = icons[category] ?? Briefcase;
   return <Icon aria-hidden="true" {...props} />;
 }
