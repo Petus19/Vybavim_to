@@ -167,7 +167,8 @@ export interface paths {
         /** Vyhľadávanie inzerátov s filtrami a zoradením */
         get: operations["SearchListings"];
         put?: never;
-        post?: never;
+        /** Pridanie inzerátu – autorom je prihlásený používateľ */
+        post: operations["CreateListing"];
         delete?: never;
         options?: never;
         head?: never;
@@ -183,6 +184,41 @@ export interface paths {
         };
         /** Detail inzerátu */
         get: operations["GetListing"];
+        /** Úprava inzerátu – iba autor a iba kým je otvorený */
+        put: operations["UpdateListing"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/listings/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stiahnutie inzerátu – autor alebo admin */
+        post: operations["CancelListing"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/listings/mine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Moje inzeráty – všetky stavy, najnovšie prvé */
+        get: operations["GetMyListings"];
         put?: never;
         post?: never;
         delete?: never;
@@ -201,6 +237,11 @@ export interface components {
             /** Format: int64 */
             expiresIn: number;
             refreshToken: string;
+        };
+        BudgetInput: {
+            type: components["schemas"]["BudgetType"];
+            /** Format: double */
+            amount: null | number;
         };
         BudgetResponse: {
             type: components["schemas"]["BudgetType"];
@@ -245,6 +286,23 @@ export interface components {
             /** Format: uuid */
             ownerId: string;
         };
+        ListingInput: {
+            category: string;
+            title: string;
+            description: string;
+            budget: components["schemas"]["BudgetInput"];
+            city: null | string;
+            remote: boolean;
+            /** Format: date */
+            deadline: null | string;
+            level: components["schemas"]["ExperienceLevel"];
+            scope: components["schemas"]["ScopeInput"];
+            engagement: components["schemas"]["Engagement"];
+            invoiceRequired: boolean;
+            skills: string[];
+            deliverables: null | string[];
+            requirements: null | string[];
+        };
         /** @enum {unknown} */
         ListingStatus: "open" | "in_progress" | "completed" | "cancelled";
         ListingSummaryResponse: {
@@ -281,6 +339,10 @@ export interface components {
         RegisterRequest: {
             email: string;
             password: string;
+        };
+        ScopeInput: {
+            size: components["schemas"]["ProjectSize"];
+            duration: string;
         };
         ScopeResponse: {
             size: components["schemas"]["ProjectSize"];
@@ -497,6 +559,30 @@ export interface operations {
             };
         };
     };
+    CreateListing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ListingInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListingDetailResponse"];
+                };
+            };
+        };
+    };
     GetListing: {
         parameters: {
             query?: never;
@@ -515,6 +601,77 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ListingDetailResponse"];
+                };
+            };
+        };
+    };
+    UpdateListing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ListingInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListingDetailResponse"];
+                };
+            };
+        };
+    };
+    CancelListing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListingDetailResponse"];
+                };
+            };
+        };
+    };
+    GetMyListings: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PagedResponseOfListingSummaryResponse"];
                 };
             };
         };

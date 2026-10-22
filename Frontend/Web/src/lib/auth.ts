@@ -1,7 +1,7 @@
 import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { ApiUnavailableError, client, type AccessTokens, type User } from "@/lib/api";
+import { ApiUnavailableError, authHeaders, client, type AccessTokens, type User } from "@/lib/api";
 import {
   ACCESS_COOKIE,
   REFRESH_COOKIE,
@@ -32,17 +32,22 @@ export async function clearTokens() {
   store.delete(REFRESH_COOKIE);
 }
 
+/** Access token z cookie – na volanie chránených endpointov API (`authHeaders(token)`). */
+export async function getAccessToken(): Promise<string | null> {
+  return (await cookies()).get(ACCESS_COOKIE)?.value ?? null;
+}
+
 /**
  * Prihlásený používateľ alebo `null`. Číta cookie, preto beží iba pri požiadavke
  * a komponent, ktorý ho volá, musí byť v `<Suspense>`.
  */
 export const getCurrentUser = cache(async (): Promise<User | null> => {
-  const token = (await cookies()).get(ACCESS_COOKIE)?.value;
+  const token = await getAccessToken();
   if (!token) return null;
 
   try {
     const { data, response } = await client.GET("/api/v1/auth/me", {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: authHeaders(token),
     });
     if (data) return data;
     if (response.status === 401) return null; // token neplatný alebo vypršal
@@ -61,6 +66,14 @@ export async function requireUser(returnTo: string): Promise<User> {
   const user = await getCurrentUser();
   if (!user) redirect(loginHref(returnTo));
   return user;
+}
+
+/** Ako `requireUser`, ale vráti aj access token – pre stránky, ktoré volajú chránené endpointy. */
+export async function requireSession(returnTo: string): Promise<{ user: User; token: string }> {
+  const user = await requireUser(returnTo);
+  const token = await getAccessToken();
+  if (!token) redirect(loginHref(returnTo));
+  return { user, token };
 }
 
 /** Odkaz na prihlásenie s návratom na danú stránku. */
