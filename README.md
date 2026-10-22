@@ -335,7 +335,9 @@ Ak je niektorý port na počítači obsadený, zmeň ho v súbore `.env` (je mim
 
 - [ ] Používateľské účty: registrácia, prihlásenie (e-mail + Google), profil jednotlivca / firmy
   - [x] ASP.NET Core Identity: registrácia a prihlásenie e-mailom alebo menom, tokeny (access + refresh), role (Admin), `ICurrentUser` pre moduly, testovací admin vo vývoji
-  - [ ] overenie e-mailu a zabudnuté heslo (potrebuje frontu úloh), prihlásenie cez Google, profily
+  - [x] prihlásenie cez Google
+  - [x] profily (modul Profiles): jednotlivec / firma, môj profil, verejný profil, autor na detaile inzerátu cez `Profiles.Contracts`
+  - [ ] overenie e-mailu a zabudnuté heslo (potrebuje frontu úloh), fotka / logo v profile (nahrávanie súborov)
 - [ ] Inzeráty: pridanie a zoznam
   - [x] API: zoznam, detail, pridanie, úprava, stiahnutie (autor / admin), moje inzeráty; slovenské chyby s kódom
   - [ ] web: formulár na pridanie a úpravu, stránka „moje inzeráty“
