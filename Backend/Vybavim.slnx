@@ -51,6 +51,7 @@
   <Folder Name="/Tests/">
     <File Path="Tests/Directory.Build.props" />
     <Project Path="Tests/Modules.Listings.Tests/Vybavim.Modules.Listings.Tests.csproj" />
+    <Project Path="Tests/Modules.Profiles.Tests/Vybavim.Modules.Profiles.Tests.csproj" />
     <Project Path="Tests/IntegrationTests/Vybavim.IntegrationTests.csproj" />
     <Project Path="Tests/ArchitectureTests/Vybavim.ArchitectureTests.csproj" />
   </Folder>

@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Unit testy modulu Profiles: doména a pravidlá, bez databázy. -->
+  <ItemGroup>
+    <ProjectReference Include="../../Modules/Profiles/Profiles/Vybavim.Modules.Profiles.csproj" />
+  </ItemGroup>
+</Project>
