@@ -1,0 +1,74 @@
+# Automatická kontrola pri každom pull requeste a pri zmene v main.
+# Ak niektorý krok zlyhá, PR na GitHube ukáže červený krížik ešte pred zlúčením.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Iba čítanie repozitára – workflow nič nemení
+permissions:
+  contents: read
+
+# Keď do PR príde nový commit, predchádzajúca (ešte bežiaca) kontrola sa zruší
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (build + testy)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Backend
+    steps:
+      - name: Stiahnutie kódu
+        uses: actions/checkout@v7
+
+      - name: Inštalácia .NET (verzia z global.json)
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: Backend/global.json
+
+      - name: Obnovenie balíkov
+        run: dotnet restore Vybavim.slnx
+
+      - name: Build (varovania = chyby)
+        run: dotnet build Vybavim.slnx --no-restore --configuration Release
+
+      # Unit, architektonické aj integračné testy. Integračné si spustia PostgreSQL
+      # v Dockeri (Testcontainers) – Docker je na GitHub runneri predinštalovaný.
+      - name: Testy
+        run: dotnet test --no-build --configuration Release
+
+  web:
+    name: Web (lint + typy + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Frontend/Web
+    steps:
+      - name: Stiahnutie kódu
+        uses: actions/checkout@v7
+
+      - name: Inštalácia Node (verzia z .nvmrc)
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: Frontend/Web/.nvmrc
+          cache: npm
+          cache-dependency-path: Frontend/Web/package-lock.json
+
+      - name: Inštalácia balíkov (presne podľa package-lock.json)
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Kontrola typov
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build

@@ -48,4 +48,10 @@
     <Project Path="Modules/Gdpr/Gdpr/Vybavim.Modules.Gdpr.csproj" />
     <Project Path="Modules/Gdpr/Gdpr.Contracts/Vybavim.Modules.Gdpr.Contracts.csproj" />
   </Folder>
+  <Folder Name="/Tests/">
+    <File Path="Tests/Directory.Build.props" />
+    <Project Path="Tests/Modules.Listings.Tests/Vybavim.Modules.Listings.Tests.csproj" />
+    <Project Path="Tests/IntegrationTests/Vybavim.IntegrationTests.csproj" />
+    <Project Path="Tests/ArchitectureTests/Vybavim.ArchitectureTests.csproj" />
+  </Folder>
 </Solution>

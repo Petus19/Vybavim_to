@@ -21,6 +21,10 @@ dotnet_sort_system_directives_first = true
 # CA1716: názvy ako "Error" sú kľúčové slová vo Visual Basic – píšeme iba v C#, netýka sa nás
 dotnet_diagnostic.CA1716.severity = none
 
+# Testy: názvy v tvare Metóda_Situácia_Výsledok (napr. Create_EmptyTitle_Throws) používajú podčiarkovníky
+[Tests/**/*.cs]
+dotnet_diagnostic.CA1707.severity = none
+
 # Migrácie generuje EF Core (dotnet ef) – analyzátory ich nekontrolujú
 [**/Migrations/*.cs]
 generated_code = true
