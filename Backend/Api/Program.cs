@@ -1,7 +1,9 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Scalar.AspNetCore;
+using Vybavim.Api.OpenApi;
 using Vybavim.Common.Extensions;
+using Vybavim.Modules.Identity;
 using Vybavim.Modules.Listings;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -21,8 +23,9 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.NumberHandling = JsonNumberHandling.Strict;
 });
 
-// Popis API (OpenAPI) – zo všetkých endpointov sa automaticky vytvorí /openapi/v1.json
-builder.Services.AddOpenApi();
+// Popis API (OpenAPI) – zo všetkých endpointov sa automaticky vytvorí /openapi/v1.json.
+// Transformer doplní prihlasovanie tokenom, aby sa dalo skúšať aj v Scalar.
+builder.Services.AddOpenApi(options => options.AddDocumentTransformer<BearerSecuritySchemeTransformer>());
 
 // Web beží na inej adrese (localhost:3000) – prehliadač mu musí dovoliť volať API.
 // Povolené adresy sú v appsettings (Cors:AllowedOrigins).
@@ -30,7 +33,11 @@ var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get
 builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
     policy.WithOrigins(allowedOrigins).AllowAnyHeader().AllowAnyMethod()));
 
+// „Kto práve volá API“ – moduly si ho vypýtajú cez ICurrentUser
+builder.Services.AddCurrentUser();
+
 // --- Moduly ---
+builder.Services.AddIdentityModule(builder.Configuration);
 builder.Services.AddListingsModule(builder.Configuration);
 
 var app = builder.Build();
@@ -39,6 +46,11 @@ var app = builder.Build();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 app.UseCors();
+
+// Prihlásenie: z hlavičky "Authorization: Bearer …" zistí, kto volá (Authentication),
+// a pri chránených endpointoch overí, či na to má právo (Authorization).
+app.UseAuthentication();
+app.UseAuthorization();
 
 if (app.Environment.IsDevelopment())
 {
@@ -56,6 +68,7 @@ app.MapGet("/api/v1/health", () => Results.Ok(new { status = "ok" }))
     .WithTags("Systém")
     .WithSummary("Kontrola, či API beží");
 
+app.MapIdentityEndpoints();
 app.MapListingsEndpoints();
 
 await app.RunAsync();
