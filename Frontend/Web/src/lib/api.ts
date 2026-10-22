@@ -39,6 +39,17 @@ export const baseUrl = process.env.API_URL ?? "http://localhost:5080";
 /** Typovaný klient – používa ho aj `src/lib/auth.ts` pre prihlásenie. */
 export const client = createClient<paths>({ baseUrl });
 
+/** Hlavička pre chránené endpointy. Token je v httpOnly cookie – pozri `getAccessToken` v `src/lib/auth.ts`. */
+export function authHeaders(token: string) {
+  return { Authorization: `Bearer ${token}` };
+}
+
+/** Chybová hláška z API (ProblemDetails `title`) – API ich vracia po slovensky. */
+export function problemTitle(error: unknown, fallback: string): string {
+  const title = (error as { title?: unknown } | undefined)?.title;
+  return typeof title === "string" && title ? title : fallback;
+}
+
 /** API nebeží alebo vrátilo neočakávanú chybu – zobrazí sa chybová stránka (app/error.tsx). */
 export class ApiUnavailableError extends Error {
   constructor(cause?: unknown) {
@@ -79,21 +90,42 @@ export async function searchListings(query: ListingSearchQuery): Promise<SearchR
   );
   if (data) return { ok: true, page: data };
   if (response.status === 400) {
-    const title = (error as { title?: string } | undefined)?.title;
-    return { ok: false, message: title ?? "Neplatný filter." };
+    return { ok: false, message: problemTitle(error, "Neplatný filter.") };
   }
   throw new ApiUnavailableError(`HTTP ${response.status}`);
 }
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** Detail inzerátu alebo `null`, ak neexistuje. `cache` – stránka aj metadáta volajú API raz. */
-export const getListing = cache(async (id: string): Promise<Listing | null> => {
-  if (!uuidPattern.test(id)) return null;
+/**
+ * Detail inzerátu alebo `null`, ak neexistuje. `cache` – stránka aj metadáta volajú API raz.
+ * S tokenom autora vráti aj jeho stiahnutý inzerát (ostatní dostanú 404).
+ */
+export const getListing = cache(
+  async (id: string, token: string | null): Promise<Listing | null> => {
+    if (!uuidPattern.test(id)) return null;
+    const { data, response } = await call(() =>
+      client.GET("/api/v1/listings/{id}", {
+        params: { path: { id } },
+        headers: token ? authHeaders(token) : undefined,
+      }),
+    );
+    if (data) return data;
+    if (response.status === 404) return null;
+    throw new ApiUnavailableError(`HTTP ${response.status}`);
+  },
+);
+
+export const MY_LISTINGS_PAGE_SIZE = 20;
+
+/** Inzeráty prihláseného používateľa vo všetkých stavoch, najnovšie prvé. */
+export async function getMyListings(token: string, page: number): Promise<ListingPage> {
   const { data, response } = await call(() =>
-    client.GET("/api/v1/listings/{id}", { params: { path: { id } } }),
+    client.GET("/api/v1/listings/mine", {
+      params: { query: { page, pageSize: MY_LISTINGS_PAGE_SIZE } },
+      headers: authHeaders(token),
+    }),
   );
   if (data) return data;
-  if (response.status === 404) return null;
   throw new ApiUnavailableError(`HTTP ${response.status}`);
-});
+}

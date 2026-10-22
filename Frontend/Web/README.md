@@ -39,14 +39,30 @@ Adresa API sa dá zmeniť v `.env.local` (vzor `.env.example`): `API_URL=http://
 
 ## Stránky
 
-| URL                     | Súbor                            | Obsah                                                                          |
-| ----------------------- | -------------------------------- | ------------------------------------------------------------------------------ |
-| `/`                     | `src/app/page.tsx`               | úvod: vyhľadávanie, kategórie, najnovšie inzeráty, ako to funguje              |
-| `/inzeraty`             | `src/app/inzeraty/page.tsx`      | zoznam s vyhľadávaním, kategóriami, panelom „Filtre“ a zoradením               |
-| `/inzeraty/[id]`        | `src/app/inzeraty/[id]/page.tsx` | detail: fakty v dlaždiciach, výsledky, zručnosti, požiadavky, podobné inzeráty |
-| `/prihlasenie`          | `src/app/prihlasenie/page.tsx`   | prihlásenie a registrácia (záložky, `?rezim=registracia`, `?navrat=`)          |
-| `/inzeraty/[id]/ponuka` | `src/app/inzeraty/[id]/ponuka/`  | poslanie ponuky – **iba prihlásený**, zatiaľ „pripravujeme“                    |
-| `/pridat-inzerat`       | `src/app/pridat-inzerat/`        | pridanie inzerátu – **iba prihlásený**, zatiaľ „pripravujeme“                  |
+| URL                      | Súbor                            | Obsah                                                                          |
+| ------------------------ | -------------------------------- | ------------------------------------------------------------------------------ |
+| `/`                      | `src/app/page.tsx`               | úvod: vyhľadávanie, kategórie, najnovšie inzeráty, ako to funguje              |
+| `/inzeraty`              | `src/app/inzeraty/page.tsx`      | zoznam s vyhľadávaním, kategóriami, panelom „Filtre“ a zoradením               |
+| `/inzeraty/[id]`         | `src/app/inzeraty/[id]/page.tsx` | detail: fakty v dlaždiciach, výsledky, zručnosti, požiadavky, podobné inzeráty |
+| `/prihlasenie`           | `src/app/prihlasenie/page.tsx`   | prihlásenie a registrácia (záložky, `?rezim=registracia`, `?navrat=`)          |
+| `/inzeraty/[id]/ponuka`  | `src/app/inzeraty/[id]/ponuka/`  | poslanie ponuky – **iba prihlásený**, zatiaľ „pripravujeme“                    |
+| `/pridat-inzerat`        | `src/app/pridat-inzerat/`        | pridanie inzerátu v 3 krokoch – **iba prihlásený**                             |
+| `/inzeraty/[id]/upravit` | `src/app/inzeraty/[id]/upravit/` | úprava inzerátu – **iba autor** a iba otvorený inzerát                         |
+| `/moje-inzeraty`         | `src/app/moje-inzeraty/`         | moje inzeráty vo všetkých stavoch, stiahnutie – **iba prihlásený**             |
+
+### Pridanie a úprava inzerátu
+
+Jeden formulár pre oboje (`src/components/listing-form.tsx`) v troch krokoch: **čo potrebuješ** (kategória, názov, popis, zručnosti, výsledky, požiadavky) → **rozpočet a termín** (cena, úroveň, rozsah, spolupráca, termín) → **kde** (na diaľku / mesto, faktúra, náhľad karty).
+
+- **Pravidlá** sú v `src/lib/listing-form.ts` a zhodujú sa s backendom (`Listing.Normalize`): názov max. 120 znakov, popis max. 5000, 1–10 zručností, suma > 0 okrem ceny dohodou, mesto povinné, ak práca nie je na diaľku, termín nie v minulosti. Chyby sa ukážu po kliknutí na „Pokračovať“ a kurzor skočí na prvé chybné pole.
+- **Uloženie:** Server Action `saveListing` (`src/app/pridat-inzerat/actions.ts`) overí pravidlá ešte raz a zavolá `POST /api/v1/listings` alebo `PUT /api/v1/listings/{id}`. Chybu z API s kódom (napr. `listing.title_too_long`) zobrazí pri príslušnom poli (`fieldByErrorCode`), ostatné nad tlačidlom. Po uložení presmeruje na detail inzerátu.
+- **Úprava** je pre autora („Upraviť“ v Moje inzeráty a na detaile). Cudzí inzerát vráti „nenašli sme“ a neotvorený (prebieha, stiahnutý) iba vysvetlenie.
+
+### Moje inzeráty
+
+- Zoznam z `GET /api/v1/listings/mine` (všetky stavy, najnovšie prvé, 20 na stranu, `?strana=`). Odkaz je v menu účtu v hlavičke.
+- **Stiahnuť** sa dá iba otvorený inzerát – tlačidlo sa najprv opýta priamo v riadku (`src/components/cancel-listing-button.tsx`), potom Server Action `cancelListing` (`src/app/moje-inzeraty/actions.ts`) zavolá `POST /api/v1/listings/{id}/cancel` a `refresh()` načíta stránku nanovo. Ak sa stav medzitým zmenil (409), ukáže sa aktuálny stav.
+- Stiahnutý inzerát vo vyhľadávaní nie je a cudzí ho nevidia (404). **Autor** ho na detaile vidí, lebo web posiela API aj jeho token (`getListing(id, token)`), a namiesto „Poslať ponuku“ má „Toto je tvoj inzerát“.
 
 ### Filtre inzerátov (parametre v URL)
 
@@ -80,18 +96,18 @@ Pevná cena a hodinová sadzba sa **nikdy navzájom neporovnávajú** – rozsah
 
 Prezerať inzeráty môže každý. Prihlásenie sa vyžaduje až **pri akcii** (poslať ponuku, pridať inzerát, neskôr chat a obľúbené) a po ňom sa človek **vráti presne tam, kam smeroval** (`?navrat=`).
 
-| Súbor                             | Čo robí                                                                                                                           |
-| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `src/lib/auth.ts`                 | `getCurrentUser()` (kto je prihlásený, cez `GET /api/v1/auth/me`), `requireUser(navrat)` pre chránené stránky, `safeReturnPath()` |
-| `src/app/prihlasenie/actions.ts`  | Server Actions `login`, `register` (po registrácii rovno prihlási), `logout`                                                      |
-| `src/components/auth-form.tsx`    | formulár s chybami z API a priebežnou kontrolou pravidiel hesla                                                                   |
-| `src/components/account-menu.tsx` | v hlavičke „Prihlásiť“ alebo avatar s menu a odhlásením                                                                           |
-| `src/proxy.ts`                    | keď vyprší access token (1 h), vypýta si od API nový pomocou refresh tokenu (14 dní)                                              |
-| `src/lib/auth-cookies.ts`         | názvy a nastavenia cookies                                                                                                        |
+| Súbor                             | Čo robí                                                                                                                                                                                          |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/lib/auth.ts`                 | `getCurrentUser()` (kto je prihlásený, cez `GET /api/v1/auth/me`), `requireUser(navrat)` pre chránené stránky, `requireSession(navrat)` – navyše token na chránené endpointy, `safeReturnPath()` |
+| `src/app/prihlasenie/actions.ts`  | Server Actions `login`, `register` (po registrácii rovno prihlási), `logout`                                                                                                                     |
+| `src/components/auth-form.tsx`    | formulár s chybami z API a priebežnou kontrolou pravidiel hesla                                                                                                                                  |
+| `src/components/account-menu.tsx` | v hlavičke „Prihlásiť“ alebo avatar s menu a odhlásením                                                                                                                                          |
+| `src/proxy.ts`                    | keď vyprší access token (1 h), vypýta si od API nový pomocou refresh tokenu (14 dní)                                                                                                             |
+| `src/lib/auth-cookies.ts`         | názvy a nastavenia cookies                                                                                                                                                                       |
 
 **Tokeny** sú v cookies `vybavim_access` a `vybavim_refresh` s príznakom **httpOnly** – JavaScript v prehliadači sa k nim nedostane, API volá iba server webu. V produkcii majú aj `secure` (iba HTTPS).
 
-**Nová chránená stránka:** komponent v `<Suspense>` zavolá `await requireUser("/adresa-stranky")` – neprihláseného presmeruje na prihlásenie a po ňom ho vráti späť. Vzor je v `src/app/pridat-inzerat/page.tsx`.
+**Nová chránená stránka:** komponent v `<Suspense>` zavolá `await requireUser("/adresa-stranky")` – neprihláseného presmeruje na prihlásenie a po ňom ho vráti späť. Vzor je v `src/app/pridat-inzerat/page.tsx`. Ak stránka volá chránený endpoint API, použi `requireSession` a token pošli cez `authHeaders(token)` (vzor `src/app/moje-inzeraty/page.tsx`).
 
 **Bezpečnosť:** `navrat` smie byť iba adresa tohto webu (`/…`), cudzie adresy (`//evil.com`, `https://…`) sa ignorujú – odkaz na prihlásenie sa tak nedá zneužiť na presmerovanie na podvodnú stránku.
 

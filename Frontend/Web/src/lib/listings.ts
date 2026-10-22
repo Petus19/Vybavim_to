@@ -51,7 +51,7 @@ export const statusLabels: Record<ListingStatus, string> = {
   open: "Otvorený",
   in_progress: "Prebieha",
   completed: "Dokončený",
-  cancelled: "Zrušený",
+  cancelled: "Stiahnutý",
 };
 
 /** Názov kategórie podľa slugu z inzerátu (napr. "grafika" → „Grafika a logo“). */

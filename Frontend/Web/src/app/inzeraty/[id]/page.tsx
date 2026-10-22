@@ -15,6 +15,7 @@ import {
 import { ChevronLink } from "@/components/chevron-link";
 import { ListingCard } from "@/components/listing-card";
 import { getCategories, getListing, searchListings, type Listing } from "@/lib/api";
+import { getAccessToken, getCurrentUser } from "@/lib/auth";
 import {
   categoryName,
   engagementLabels,
@@ -28,7 +29,7 @@ import {
 
 export async function generateMetadata(props: PageProps<"/inzeraty/[id]">): Promise<Metadata> {
   const { id } = await props.params;
-  const listing = await getListing(id);
+  const listing = await getListing(id, await getAccessToken());
   return { title: listing?.title ?? "Inzerát nenájdený" };
 }
 
@@ -50,10 +51,18 @@ export default function ListingDetailPage(props: PageProps<"/inzeraty/[id]">) {
 
 async function ListingDetail({ params }: { params: Params }) {
   const { id } = await params;
-  const [listing, categories] = await Promise.all([getListing(id), getCategories()]);
+  // S tokenom autor uvidí aj svoj stiahnutý inzerát (napr. z „Moje inzeráty“)
+  const token = await getAccessToken();
+  const [listing, categories, user] = await Promise.all([
+    getListing(id, token),
+    getCategories(),
+    // Neprihlásený alebo nedostupné overenie → zobrazí sa ako cudzí inzerát
+    getCurrentUser().catch(() => null),
+  ]);
   if (!listing) notFound();
 
   const isOpen = listing.status === "open";
+  const isOwner = user?.id === listing.ownerId;
 
   return (
     <>
@@ -75,7 +84,7 @@ async function ListingDetail({ params }: { params: Params }) {
       <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,1fr)_300px]">
         {/* Na mobile ide rozpočet s tlačidlom hneď pod nadpis, na počítači je vpravo */}
         <aside className="lg:sticky lg:top-20 lg:order-last lg:self-start">
-          <BudgetCard listing={listing} />
+          <BudgetCard listing={listing} isOwner={isOwner} />
         </aside>
 
         <article className="min-w-0">
@@ -220,13 +229,29 @@ function Section({ title, children }: { title: string; children: React.ReactNode
  * Rozpočet a tlačidlo. Počet ponúk a údaje o zadávateľovi (meno, hodnotenie, overenie)
  * API zatiaľ nevracia – pribudnú s modulmi Identity, Profiles a Reviews.
  */
-function BudgetCard({ listing }: { listing: Listing }) {
+function BudgetCard({ listing, isOwner }: { listing: Listing; isOwner: boolean }) {
   const isOpen = listing.status === "open";
   return (
     <div className="rounded-3xl bg-surface p-6">
       <p className="text-sm text-muted-foreground">Rozpočet</p>
       <p className="mt-1 text-3xl font-semibold tracking-tight">{formatBudget(listing.budget)}</p>
-      {isOpen ? (
+      {isOwner ? (
+        // Autor si ponuku sám neposiela – stav inzerátu spravuje v „Moje inzeráty“
+        <div className="mt-5 space-y-3">
+          {isOpen && (
+            <Link
+              href={`/inzeraty/${listing.id}/upravit`}
+              className="flex h-11 w-full items-center justify-center rounded-full bg-primary text-base font-medium text-primary-foreground transition-opacity hover:opacity-90"
+            >
+              Upraviť inzerát
+            </Link>
+          )}
+          <p className="text-sm text-muted-foreground">Toto je tvoj inzerát.</p>
+          <ChevronLink href="/moje-inzeraty" className="text-sm">
+            Moje inzeráty
+          </ChevronLink>
+        </div>
+      ) : isOpen ? (
         // Stránka ponuky je iba pre prihlásených – neprihláseného presmeruje na prihlásenie
         // a po ňom ho vráti späť sem, k posielaniu ponuky.
         <Link
