@@ -2,8 +2,6 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import {
-  BadgeCheck,
-  Building2,
   CalendarDays,
   CircleCheck,
   Gauge,
@@ -11,36 +9,25 @@ import {
   MapPin,
   Receipt,
   Repeat,
-  Star,
-  User,
   type LucideIcon,
 } from "lucide-react";
 import { ChevronLink } from "@/components/chevron-link";
 import { ListingCard } from "@/components/listing-card";
+import { getCategories, getListing, searchListings, type Listing } from "@/lib/api";
 import {
+  categoryName,
   engagementLabels,
   formatBudget,
   formatDate,
-  getCategory,
-  getListing,
-  getSimilarListings,
   levelDescriptions,
   levelLabels,
-  listings,
-  plural,
   sizeLabels,
   statusLabels,
-  type Listing,
 } from "@/lib/listings";
-
-// Mock inzeráty poznáme vopred, takže sa detaily vygenerujú pri builde
-export function generateStaticParams() {
-  return listings.map((l) => ({ id: l.id }));
-}
 
 export async function generateMetadata(props: PageProps<"/inzeraty/[id]">): Promise<Metadata> {
   const { id } = await props.params;
-  const listing = getListing(id);
+  const listing = await getListing(id);
   return { title: listing?.title ?? "Inzerát nenájdený" };
 }
 
@@ -52,7 +39,7 @@ export default function ListingDetailPage(props: PageProps<"/inzeraty/[id]">) {
       <ChevronLink href="/inzeraty" back className="text-sm">
         Inzeráty
       </ChevronLink>
-      {/* params (id z URL) čítame v Suspense, aby navigácia zobrazila stránku okamžite */}
+      {/* Inzerát sa načítava z API podľa id z URL – v Suspense, aby sa stránka zobrazila hneď */}
       <Suspense fallback={<DetailSkeleton />}>
         <ListingDetail params={props.params} />
       </Suspense>
@@ -62,18 +49,16 @@ export default function ListingDetailPage(props: PageProps<"/inzeraty/[id]">) {
 
 async function ListingDetail({ params }: { params: Params }) {
   const { id } = await params;
-  const listing = getListing(id);
+  const [listing, categories] = await Promise.all([getListing(id), getCategories()]);
   if (!listing) notFound();
 
-  const category = getCategory(listing.category);
   const isOpen = listing.status === "open";
-  const similar = getSimilarListings(listing);
 
   return (
     <>
       <header className="mt-8 max-w-3xl">
         <p className="text-sm font-medium text-brand">
-          {category.name}
+          {categoryName(categories, listing.category)}
           {!isOpen && (
             <span className="text-muted-foreground"> · {statusLabels[listing.status]}</span>
           )}
@@ -82,18 +67,14 @@ async function ListingDetail({ params }: { params: Params }) {
           {listing.title}
         </h1>
         <p className="mt-4 text-muted-foreground">
-          {listing.city} · pridané {formatDate(listing.createdAt)}
+          {listing.city ?? "Na diaľku"} · pridané {formatDate(listing.createdAt)}
         </p>
       </header>
 
       <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,1fr)_300px]">
-        {/* Na mobile ide rozpočet s tlačidlom hneď pod nadpis a zadávateľ až na koniec,
-            na počítači sú obe karty v pravom stĺpci */}
-        <aside className="space-y-4 lg:sticky lg:top-20 lg:order-last lg:self-start">
+        {/* Na mobile ide rozpočet s tlačidlom hneď pod nadpis, na počítači je vpravo */}
+        <aside className="lg:sticky lg:top-20 lg:order-last lg:self-start">
           <BudgetCard listing={listing} />
-          <div className="hidden lg:block">
-            <OwnerCard owner={listing.owner} />
-          </div>
         </aside>
 
         <article className="min-w-0">
@@ -103,7 +84,7 @@ async function ListingDetail({ params }: { params: Params }) {
             <p className="text-lg leading-relaxed whitespace-pre-line">{listing.description}</p>
           </Section>
 
-          {listing.deliverables && listing.deliverables.length > 0 && (
+          {listing.deliverables.length > 0 && (
             <Section title="Čo má byť výsledkom">
               <ul className="space-y-3">
                 {listing.deliverables.map((item) => (
@@ -119,17 +100,19 @@ async function ListingDetail({ params }: { params: Params }) {
             </Section>
           )}
 
-          <Section title="Zručnosti">
-            <ul className="flex flex-wrap gap-2">
-              {listing.skills.map((skill) => (
-                <li key={skill} className="rounded-full bg-surface px-3.5 py-1.5 text-sm">
-                  {skill}
-                </li>
-              ))}
-            </ul>
-          </Section>
+          {listing.skills.length > 0 && (
+            <Section title="Zručnosti">
+              <ul className="flex flex-wrap gap-2">
+                {listing.skills.map((skill) => (
+                  <li key={skill} className="rounded-full bg-surface px-3.5 py-1.5 text-sm">
+                    {skill}
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          )}
 
-          {listing.requirements && listing.requirements.length > 0 && (
+          {listing.requirements.length > 0 && (
             <Section title="Požiadavky na odborníka">
               <ul className="list-disc space-y-2 pl-5 marker:text-muted-foreground">
                 {listing.requirements.map((item) => (
@@ -138,27 +121,37 @@ async function ListingDetail({ params }: { params: Params }) {
               </ul>
             </Section>
           )}
-
-          <div className="mt-12 lg:hidden">
-            <OwnerCard owner={listing.owner} />
-          </div>
         </article>
       </div>
 
-      {similar.length > 0 && (
-        <section className="mt-20">
-          <div className="flex items-baseline justify-between gap-4">
-            <h2 className="text-2xl font-semibold tracking-tight">Podobné inzeráty</h2>
-            <ChevronLink href={`/inzeraty?kategoria=${listing.category}`}>Všetky</ChevronLink>
-          </div>
-          <div className="mt-6 grid gap-4 md:grid-cols-3">
-            {similar.map((l) => (
-              <ListingCard key={l.id} listing={l} />
-            ))}
-          </div>
-        </section>
-      )}
+      <Suspense fallback={null}>
+        <SimilarListings listing={listing} />
+      </Suspense>
     </>
+  );
+}
+
+/** Otvorené inzeráty z rovnakej kategórie (bez aktuálneho). */
+async function SimilarListings({ listing }: { listing: Listing }) {
+  const [categories, result] = await Promise.all([
+    getCategories(),
+    searchListings({ category: listing.category, openOnly: true, sort: "newest", pageSize: 4 }),
+  ]);
+  const similar = result.ok ? result.page.items.filter((l) => l.id !== listing.id).slice(0, 3) : [];
+  if (similar.length === 0) return null;
+
+  return (
+    <section className="mt-20">
+      <div className="flex items-baseline justify-between gap-4">
+        <h2 className="text-2xl font-semibold tracking-tight">Podobné inzeráty</h2>
+        <ChevronLink href={`/inzeraty?kategoria=${listing.category}`}>Všetky</ChevronLink>
+      </div>
+      <div className="mt-6 grid gap-4 md:grid-cols-3">
+        {similar.map((l) => (
+          <ListingCard key={l.id} listing={l} categoryName={categoryName(categories, l.category)} />
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -186,8 +179,8 @@ function Facts({ listing }: { listing: Listing }) {
     {
       icon: MapPin,
       label: "Spôsob práce",
-      value: listing.remote ? "Aj na diaľku" : "Osobne",
-      hint: listing.remote ? undefined : listing.city,
+      value: !listing.city ? "Na diaľku" : listing.remote ? "Aj na diaľku" : "Osobne",
+      hint: listing.city && !listing.remote ? listing.city : undefined,
     },
     {
       icon: Receipt,
@@ -222,16 +215,16 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+/**
+ * Rozpočet a tlačidlo. Počet ponúk a údaje o zadávateľovi (meno, hodnotenie, overenie)
+ * API zatiaľ nevracia – pribudnú s modulmi Identity, Profiles a Reviews.
+ */
 function BudgetCard({ listing }: { listing: Listing }) {
   const isOpen = listing.status === "open";
   return (
     <div className="rounded-3xl bg-surface p-6">
       <p className="text-sm text-muted-foreground">Rozpočet</p>
       <p className="mt-1 text-3xl font-semibold tracking-tight">{formatBudget(listing.budget)}</p>
-      <p className="mt-2 text-sm text-muted-foreground">
-        {plural(listing.responses, ["ponuka", "ponuky", "ponúk"])} · odpovedá{" "}
-        {listing.owner.responseTime}
-      </p>
       {isOpen ? (
         <button
           type="button"
@@ -246,54 +239,13 @@ function BudgetCard({ listing }: { listing: Listing }) {
   );
 }
 
-function OwnerCard({ owner }: { owner: Listing["owner"] }) {
-  const Icon = owner.type === "company" ? Building2 : User;
-  return (
-    <div className="rounded-3xl bg-surface p-6">
-      <p className="text-sm text-muted-foreground">Zadávateľ</p>
-      <div className="mt-3 flex items-center gap-3">
-        <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-background">
-          <Icon className="size-5 text-muted-foreground" aria-hidden="true" />
-        </span>
-        <div className="min-w-0">
-          <p className="flex items-center gap-1 font-semibold">
-            <span className="truncate">{owner.name}</span>
-            {owner.verified && (
-              <BadgeCheck className="size-4 shrink-0 text-brand-check" aria-label="Overený" />
-            )}
-          </p>
-          <p className="inline-flex items-center gap-1 text-sm text-muted-foreground">
-            <Star className="size-3.5 fill-current" aria-hidden="true" />
-            {owner.rating.toLocaleString("sk-SK")} ·{" "}
-            {plural(owner.reviewCount, ["hodnotenie", "hodnotenia", "hodnotení"])}
-          </p>
-        </div>
-      </div>
-      <dl className="mt-4 space-y-1.5 border-t border-border/60 pt-4 text-sm">
-        <OwnerStat label="Zadané projekty" value={String(owner.projectCount)} />
-        <OwnerStat label="Na platforme od" value={owner.memberSince} />
-        <OwnerStat label="Overený účet" value={owner.verified ? "Áno" : "Zatiaľ nie"} />
-      </dl>
-    </div>
-  );
-}
-
-function OwnerStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex justify-between gap-3">
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="font-medium">{value}</dd>
-    </div>
-  );
-}
-
 function DetailSkeleton() {
   return (
     <div className="mt-8 space-y-6">
       <div className="h-14 w-3/4 animate-pulse rounded-2xl bg-surface" />
       <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_300px]">
         <div className="h-64 animate-pulse rounded-3xl bg-surface" />
-        <div className="h-48 animate-pulse rounded-3xl bg-surface" />
+        <div className="h-40 animate-pulse rounded-3xl bg-surface" />
       </div>
     </div>
   );

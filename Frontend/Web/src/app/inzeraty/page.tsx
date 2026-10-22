@@ -2,24 +2,25 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import Link from "next/link";
 import { ChevronDown, Search } from "lucide-react";
-import { ListingCard } from "@/components/listing-card";
+import { ListingCard, ListingCardSkeleton } from "@/components/listing-card";
 import { ChevronLink } from "@/components/chevron-link";
 import { FiltersDisclosure } from "@/components/filters-disclosure";
 import { SearchForm } from "@/components/search-form";
 import {
-  categories,
-  cities,
-  engagementLabels,
-  getListings,
-  levelLabels,
-  plural,
+  getCategories,
+  searchListings,
   type BudgetType,
   type Engagement,
   type ExperienceLevel,
-  type PriceRange,
-  type SortOrder,
-} from "@/lib/listings";
+  type ListingSearchQuery,
+} from "@/lib/api";
+import { categoryName, cities, engagementLabels, levelLabels, plural } from "@/lib/listings";
 import { cn } from "@/lib/utils";
+
+/** Počet inzerátov na jednu stránku výsledkov (API dovoľuje najviac 50). */
+const PAGE_SIZE = 24;
+
+type SortOrder = "newest" | "cheapest" | "priciest";
 
 export const metadata: Metadata = {
   title: "Inzeráty",
@@ -47,6 +48,7 @@ const filterKeys = [
   "otvorene",
   "bez_faktury",
   "zoradit",
+  "strana",
 ] as const;
 
 type Filters = Record<(typeof filterKeys)[number], string>;
@@ -96,20 +98,42 @@ function first(value: string | string[] | undefined) {
   return (Array.isArray(value) ? value[0] : value) ?? "";
 }
 
-/** Kladné celé číslo z URL, inak undefined (prázdne alebo nezmyselné hodnoty sa ignorujú). */
+/** Kladné číslo z URL, inak undefined (prázdne alebo nezmyselné hodnoty sa ignorujú). */
 function toAmount(value: string) {
   const amount = Number(value);
   return value !== "" && Number.isFinite(amount) && amount >= 0 ? amount : undefined;
 }
 
-function toRange(min: string, max: string): PriceRange {
-  return { min: toAmount(min), max: toAmount(max) };
+/** Slovenské parametre z URL webu → parametre API (`GET /api/v1/listings`). */
+function toApiQuery(filters: Filters): ListingSearchQuery {
+  const page = Math.max(1, Math.floor(toAmount(filters.strana) ?? 1));
+  return {
+    q: filters.q || undefined,
+    category: filters.kategoria || undefined,
+    city: filters.mesto || undefined,
+    budgetType: budgetTypes.find((t) => t.value === filters.typ)?.type,
+    priceMin: toAmount(filters.cena_od),
+    priceMax: toAmount(filters.cena_do),
+    rateMin: toAmount(filters.sadzba_od),
+    rateMax: toAmount(filters.sadzba_do),
+    level: levelOptions.find((o) => o.value === filters.uroven)?.level,
+    engagement: engagementOptions.find((o) => o.value === filters.spolupraca)?.engagement,
+    remote: filters.na_dialku === "1" || undefined,
+    openOnly: filters.otvorene === "1" || undefined,
+    noInvoice: filters.bez_faktury === "1" || undefined,
+    sort: sortOptions.find((s) => s.value === filters.zoradit)?.sort,
+    page,
+    pageSize: PAGE_SIZE,
+  };
 }
 
-/** URL zoznamu so zachovanými filtrami, zmení sa iba to, čo je v `change`. */
+/**
+ * URL zoznamu so zachovanými filtrami, zmení sa iba to, čo je v `change`.
+ * Pri zmene filtra sa vždy začína od prvej strany.
+ */
 function listingsHref(filters: Filters, change: Partial<Filters>) {
   const params = new URLSearchParams();
-  for (const [key, value] of Object.entries({ ...filters, ...change })) {
+  for (const [key, value] of Object.entries({ ...filters, strana: "", ...change })) {
     if (value) params.set(key, value);
   }
   const query = params.toString();
@@ -132,21 +156,13 @@ async function ListingsView({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
   const filters = Object.fromEntries(filterKeys.map((key) => [key, first(params[key])])) as Filters;
 
-  const results = getListings({
-    q: filters.q,
-    category: filters.kategoria || undefined,
-    city: filters.mesto || undefined,
-    budgetType: budgetTypes.find((t) => t.value === filters.typ)?.type,
-    fixedPrice: toRange(filters.cena_od, filters.cena_do),
-    hourlyRate: toRange(filters.sadzba_od, filters.sadzba_do),
-    level: levelOptions.find((o) => o.value === filters.uroven)?.level,
-    engagement: engagementOptions.find((o) => o.value === filters.spolupraca)?.engagement,
-    remoteOnly: filters.na_dialku === "1",
-    openOnly: filters.otvorene === "1",
-    noInvoiceOnly: filters.bez_faktury === "1",
-    sort: sortOptions.find((s) => s.value === filters.zoradit)?.sort,
-  });
-  const hasFilters = filterKeys.some((key) => key !== "zoradit" && filters[key]);
+  const [categories, result] = await Promise.all([
+    getCategories(),
+    searchListings(toApiQuery(filters)),
+  ]);
+  const hasFilters = filterKeys.some(
+    (key) => key !== "zoradit" && key !== "strana" && filters[key],
+  );
   // od/do jedného rozsahu sa počíta ako jeden filter
   const activeCount = new Set(
     panelKeys.filter((key) => filters[key]).map((key) => key.replace(/_(od|do)$/, "")),
@@ -286,10 +302,10 @@ async function ListingsView({ searchParams }: { searchParams: SearchParams }) {
             </Chip>
           </li>
           {categories.map((c) => (
-            <li key={c.id}>
+            <li key={c.slug}>
               <Chip
-                href={listingsHref(filters, { kategoria: c.id })}
-                active={filters.kategoria === c.id}
+                href={listingsHref(filters, { kategoria: c.slug })}
+                active={filters.kategoria === c.slug}
               >
                 {c.name}
               </Chip>
@@ -301,7 +317,9 @@ async function ListingsView({ searchParams }: { searchParams: SearchParams }) {
       <section aria-live="polite" className="mt-10">
         <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
           <p className="text-sm text-muted-foreground">
-            {plural(results.length, ["inzerát", "inzeráty", "inzerátov"])}
+            {result.ok
+              ? plural(result.page.total, ["inzerát", "inzeráty", "inzerátov"])
+              : "Neplatný filter"}
             {hasFilters && (
               <>
                 {" · "}
@@ -332,23 +350,74 @@ async function ListingsView({ searchParams }: { searchParams: SearchParams }) {
             })}
           </nav>
         </div>
-        {results.length > 0 ? (
-          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {results.map((l) => (
-              <ListingCard key={l.id} listing={l} />
-            ))}
-          </div>
+        {!result.ok ? (
+          <EmptyState title="Tento filter nevieme použiť" text={result.message} />
+        ) : result.page.items.length > 0 ? (
+          <>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {result.page.items.map((l) => (
+                <ListingCard
+                  key={l.id}
+                  listing={l}
+                  categoryName={categoryName(categories, l.category)}
+                />
+              ))}
+            </div>
+            <Pagination
+              page={result.page.page}
+              pageCount={Math.ceil(result.page.total / result.page.pageSize)}
+              href={(strana) => listingsHref(filters, { strana: strana > 1 ? String(strana) : "" })}
+            />
+          </>
         ) : (
-          <div className="mt-4 rounded-3xl bg-surface px-6 py-16 text-center">
-            <p className="text-xl font-semibold tracking-tight">Nič sme nenašli</p>
-            <p className="mt-2 text-muted-foreground">Skús iné slovo alebo menej filtrov.</p>
-            <ChevronLink href="/inzeraty" className="mt-6">
-              Zobraziť všetky inzeráty
-            </ChevronLink>
-          </div>
+          <EmptyState title="Nič sme nenašli" text="Skús iné slovo alebo menej filtrov." />
         )}
       </section>
     </>
+  );
+}
+
+function EmptyState({ title, text }: { title: string; text: string }) {
+  return (
+    <div className="mt-4 rounded-3xl bg-surface px-6 py-16 text-center">
+      <p className="text-xl font-semibold tracking-tight">{title}</p>
+      <p className="mt-2 text-muted-foreground">{text}</p>
+      <ChevronLink href="/inzeraty" className="mt-6">
+        Zobraziť všetky inzeráty
+      </ChevronLink>
+    </div>
+  );
+}
+
+/** Stránkovanie: Predchádzajúca · Strana 2 z 5 · Ďalšia (zobrazí sa, iba ak je viac strán). */
+function Pagination({
+  page,
+  pageCount,
+  href,
+}: {
+  page: number;
+  pageCount: number;
+  href: (page: number) => string;
+}) {
+  if (pageCount <= 1) return null;
+  return (
+    <nav aria-label="Stránkovanie" className="mt-10 flex items-center justify-center gap-6 text-sm">
+      {page > 1 ? (
+        <ChevronLink href={href(page - 1)} back>
+          Predchádzajúca
+        </ChevronLink>
+      ) : (
+        <span className="w-28" />
+      )}
+      <span className="text-muted-foreground">
+        Strana {page} z {pageCount}
+      </span>
+      {page < pageCount ? (
+        <ChevronLink href={href(page + 1)}>Ďalšia</ChevronLink>
+      ) : (
+        <span className="w-28" />
+      )}
+    </nav>
   );
 }
 
@@ -544,7 +613,7 @@ function ListingsSkeleton() {
       <div className="h-11 animate-pulse rounded-full bg-surface" />
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {Array.from({ length: 6 }, (_, i) => (
-          <div key={i} className="h-44 animate-pulse rounded-3xl bg-surface" />
+          <ListingCardSkeleton key={i} />
         ))}
       </div>
     </div>
