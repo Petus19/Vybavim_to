@@ -98,6 +98,7 @@ internal sealed class SearchListings(ListingsDbContext db)
         //    CountAsync/ToListAsync. Každý Where pridá ďalšiu podmienku do WHERE.
         var listings = db.Listings
             .AsNoTracking()
+            .Where(l => l.Status != ListingStatus.Cancelled)   // stiahnuté inzeráty verejne nezobrazujeme
             .Join(db.Categories, l => l.CategoryId, c => c.Id, (l, c) => new { Listing = l, CategorySlug = c.Slug });
 
         if (!string.IsNullOrWhiteSpace(query.Q))

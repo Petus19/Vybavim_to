@@ -1,9 +1,11 @@
+using Vybavim.Common.Errors;
+
 namespace Vybavim.Modules.Listings.Domain;
 
 /// <summary>
 /// Inzerát: zadávateľ hľadá odborníka na prácu.
 /// Vlastnosti sa dajú meniť iba metódami tejto triedy (private set),
-/// takže biznis pravidlá nikto nemôže obísť.
+/// takže biznis pravidlá nikto nemôže obísť. Porušené pravidlo = <see cref="DomainException"/>.
 /// </summary>
 internal sealed class Listing
 {
@@ -70,7 +72,7 @@ internal sealed class Listing
 
     public Guid Id { get; private set; }
 
-    /// <summary>Kto inzerát zadal. ID používateľa z modulu Identity (zatiaľ bez väzby).</summary>
+    /// <summary>Kto inzerát zadal. ID používateľa z modulu Identity.</summary>
     public Guid OwnerId { get; private set; }
 
     public Guid CategoryId { get; private set; }
@@ -129,8 +131,8 @@ internal sealed class Listing
     public DateTimeOffset UpdatedAt { get; private set; }
 
     /// <summary>
-    /// Vytvorí nový zverejnený inzerát. Jediný spôsob, ako inzerát vznikne,
-    /// takže tu sú všetky pravidlá pre nový inzerát na jednom mieste.
+    /// Vytvorí nový zverejnený inzerát. Jediný spôsob, ako inzerát vznikne.
+    /// Pravidlá overí <see cref="Normalize"/> – rovnaké ako pri úprave.
     /// </summary>
     public static Listing Create(
         Guid ownerId,
@@ -152,67 +154,82 @@ internal sealed class Listing
         IEnumerable<string>? requirements,
         DateTimeOffset now)
     {
-        // Texty
-        ArgumentException.ThrowIfNullOrWhiteSpace(title);
-        ArgumentException.ThrowIfNullOrWhiteSpace(description);
-        ArgumentException.ThrowIfNullOrWhiteSpace(estimatedDuration);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(title.Trim().Length, TitleMaxLength);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(description.Trim().Length, DescriptionMaxLength);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(estimatedDuration.Trim().Length, EstimatedDurationMaxLength);
-
-        // Rozpočet: pri cene dohodou bez sumy, inak suma musí byť > 0
-        if (budgetType == BudgetType.Negotiable && budgetAmount is not null)
-        {
-            throw new ArgumentException("Pri cene dohodou sa suma nezadáva.", nameof(budgetAmount));
-        }
-
-        if (budgetType != BudgetType.Negotiable && budgetAmount is not > 0)
-        {
-            throw new ArgumentException("Pri pevnej cene a hodinovej sadzbe musí byť suma väčšia ako 0.", nameof(budgetAmount));
-        }
-
-        // Miesto: buď na diaľku, alebo musí byť jasné, kde
-        var cleanCity = string.IsNullOrWhiteSpace(city) ? null : city.Trim();
-        if (!remote && cleanCity is null)
-        {
-            throw new ArgumentException("Ak práca nie je na diaľku, mesto je povinné.", nameof(city));
-        }
-
-        if (cleanCity is not null)
-        {
-            ArgumentOutOfRangeException.ThrowIfGreaterThan(cleanCity.Length, CityMaxLength);
-        }
-
-        // Zoznamy
-        var cleanSkills = CleanList(skills, nameof(skills));
-        if (cleanSkills.Length == 0)
-        {
-            throw new ArgumentException("Inzerát musí mať aspoň jednu zručnosť.", nameof(skills));
-        }
+        var f = Normalize(categoryId, title, description, budgetType, budgetAmount, city, remote, deadline,
+            level, size, estimatedDuration, engagement, invoiceRequired, skills, deliverables, requirements, now);
 
         return new Listing(
             id: Guid.CreateVersion7(now),   // ID zoradené podľa času vzniku
             ownerId: ownerId,
-            categoryId: categoryId,
-            title: title.Trim(),
-            description: description.Trim(),
-            budgetType: budgetType,
-            budgetAmount: budgetAmount,
+            categoryId: f.CategoryId,
+            title: f.Title,
+            description: f.Description,
+            budgetType: f.BudgetType,
+            budgetAmount: f.BudgetAmount,
             currency: "EUR",
-            city: cleanCity,
-            remote: remote,
-            deadline: deadline,
-            level: level,
-            size: size,
-            estimatedDuration: estimatedDuration.Trim(),
-            engagement: engagement,
-            invoiceRequired: invoiceRequired,
-            skills: cleanSkills,
-            deliverables: CleanList(deliverables ?? [], nameof(deliverables)),
-            requirements: CleanList(requirements ?? [], nameof(requirements)),
+            city: f.City,
+            remote: f.Remote,
+            deadline: f.Deadline,
+            level: f.Level,
+            size: f.Size,
+            estimatedDuration: f.EstimatedDuration,
+            engagement: f.Engagement,
+            invoiceRequired: f.InvoiceRequired,
+            skills: f.Skills,
+            deliverables: f.Deliverables,
+            requirements: f.Requirements,
             status: ListingStatus.Open,
             createdAt: now,
             updatedAt: now);
+    }
+
+    /// <summary>
+    /// Upraví inzerát. Dá sa iba kým je otvorený – keď už odborník pracuje,
+    /// zadanie sa nesmie meniť pod rukami. Pravidlá sú rovnaké ako pri vytvorení.
+    /// </summary>
+    public void Update(
+        Guid categoryId,
+        string title,
+        string description,
+        BudgetType budgetType,
+        decimal? budgetAmount,
+        string? city,
+        bool remote,
+        DateOnly? deadline,
+        ExperienceLevel level,
+        ProjectSize size,
+        string estimatedDuration,
+        Engagement engagement,
+        bool invoiceRequired,
+        IEnumerable<string> skills,
+        IEnumerable<string>? deliverables,
+        IEnumerable<string>? requirements,
+        DateTimeOffset now)
+    {
+        if (Status != ListingStatus.Open)
+        {
+            throw new DomainException(ListingErrors.NotEditable);
+        }
+
+        var f = Normalize(categoryId, title, description, budgetType, budgetAmount, city, remote, deadline,
+            level, size, estimatedDuration, engagement, invoiceRequired, skills, deliverables, requirements, now);
+
+        CategoryId = f.CategoryId;
+        Title = f.Title;
+        Description = f.Description;
+        BudgetType = f.BudgetType;
+        BudgetAmount = f.BudgetAmount;
+        City = f.City;
+        Remote = f.Remote;
+        Deadline = f.Deadline;
+        Level = f.Level;
+        Size = f.Size;
+        EstimatedDuration = f.EstimatedDuration;
+        Engagement = f.Engagement;
+        InvoiceRequired = f.InvoiceRequired;
+        Skills = f.Skills;
+        Deliverables = f.Deliverables;
+        Requirements = f.Requirements;
+        UpdatedAt = now;
     }
 
     /// <summary>Zadávateľ si vybral odborníka, začína sa pracovať.</summary>
@@ -221,7 +238,7 @@ internal sealed class Listing
     /// <summary>Práca je hotová.</summary>
     public void Complete(DateTimeOffset now) => ChangeStatus(ListingStatus.InProgress, ListingStatus.Completed, now);
 
-    /// <summary>Zadávateľ inzerát stiahol. Dá sa iba kým ešte nikto nepracuje.</summary>
+    /// <summary>Zadávateľ (alebo admin) inzerát stiahol. Dá sa iba kým ešte nikto nepracuje.</summary>
     public void Cancel(DateTimeOffset now) => ChangeStatus(ListingStatus.Open, ListingStatus.Cancelled, now);
 
     /// <summary>Spoločné pravidlo pre všetky zmeny stavu: zmeniť sa dá iba z očakávaného stavu.</summary>
@@ -229,15 +246,134 @@ internal sealed class Listing
     {
         if (Status != expected)
         {
-            throw new InvalidOperationException($"Inzerát v stave {Status} sa nedá prepnúť na {next}.");
+            throw new DomainException(ListingErrors.InvalidStatusChange(Status, next));
         }
 
         Status = next;
         UpdatedAt = now;
     }
 
+    /// <summary>Upravené (orezané, skontrolované) hodnoty, ktoré sa dajú meniť pri vytvorení aj úprave.</summary>
+    private readonly record struct EditableFields(
+        Guid CategoryId,
+        string Title,
+        string Description,
+        BudgetType BudgetType,
+        decimal? BudgetAmount,
+        string? City,
+        bool Remote,
+        DateOnly? Deadline,
+        ExperienceLevel Level,
+        ProjectSize Size,
+        string EstimatedDuration,
+        Engagement Engagement,
+        bool InvoiceRequired,
+        string[] Skills,
+        string[] Deliverables,
+        string[] Requirements);
+
+    /// <summary>
+    /// VŠETKY pravidlá pre obsah inzerátu na jednom mieste. Overí vstup, oreže texty
+    /// a vráti upravené hodnoty. Pri porušení hodí <see cref="DomainException"/> s kódom a hláškou.
+    /// </summary>
+    private static EditableFields Normalize(
+        Guid categoryId,
+        string title,
+        string description,
+        BudgetType budgetType,
+        decimal? budgetAmount,
+        string? city,
+        bool remote,
+        DateOnly? deadline,
+        ExperienceLevel level,
+        ProjectSize size,
+        string estimatedDuration,
+        Engagement engagement,
+        bool invoiceRequired,
+        IEnumerable<string> skills,
+        IEnumerable<string>? deliverables,
+        IEnumerable<string>? requirements,
+        DateTimeOffset now)
+    {
+        // Texty: povinné a s maximálnou dĺžkou
+        var cleanTitle = Required(title, TitleMaxLength, ListingErrors.TitleRequired, ListingErrors.TitleTooLong);
+        var cleanDescription = Required(description, DescriptionMaxLength, ListingErrors.DescriptionRequired, ListingErrors.DescriptionTooLong);
+        var cleanDuration = Required(estimatedDuration, EstimatedDurationMaxLength, ListingErrors.DurationRequired, ListingErrors.DurationTooLong);
+
+        // Rozpočet: pri cene dohodou bez sumy, inak suma musí byť > 0
+        if (budgetType == BudgetType.Negotiable && budgetAmount is not null)
+        {
+            throw new DomainException(ListingErrors.BudgetAmountNotAllowed);
+        }
+
+        if (budgetType != BudgetType.Negotiable && budgetAmount is not > 0)
+        {
+            throw new DomainException(ListingErrors.BudgetAmountRequired);
+        }
+
+        // Miesto: buď na diaľku, alebo musí byť jasné, kde
+        var cleanCity = string.IsNullOrWhiteSpace(city) ? null : city.Trim();
+        if (!remote && cleanCity is null)
+        {
+            throw new DomainException(ListingErrors.CityRequired);
+        }
+
+        if (cleanCity?.Length > CityMaxLength)
+        {
+            throw new DomainException(ListingErrors.CityTooLong);
+        }
+
+        // Termín: nie v minulosti (porovnávame iba dátumy, v UTC)
+        if (deadline < DateOnly.FromDateTime(now.UtcDateTime))
+        {
+            throw new DomainException(ListingErrors.DeadlineInPast);
+        }
+
+        // Zoznamy
+        var cleanSkills = CleanList(skills);
+        if (cleanSkills.Length == 0)
+        {
+            throw new DomainException(ListingErrors.SkillsRequired);
+        }
+
+        return new EditableFields(
+            categoryId,
+            cleanTitle,
+            cleanDescription,
+            budgetType,
+            budgetAmount,
+            cleanCity,
+            remote,
+            deadline,
+            level,
+            size,
+            cleanDuration,
+            engagement,
+            invoiceRequired,
+            cleanSkills,
+            CleanList(deliverables ?? []),
+            CleanList(requirements ?? []));
+    }
+
+    /// <summary>Povinný text: orezaný, neprázdny a nie dlhší ako maxLength.</summary>
+    private static string Required(string? value, int maxLength, Error whenEmpty, Error whenTooLong)
+    {
+        var clean = value?.Trim() ?? string.Empty;
+        if (clean.Length == 0)
+        {
+            throw new DomainException(whenEmpty);
+        }
+
+        if (clean.Length > maxLength)
+        {
+            throw new DomainException(whenTooLong);
+        }
+
+        return clean;
+    }
+
     /// <summary>Orezaný zoznam bez prázdnych a duplicitných položiek, s kontrolou počtu a dĺžky.</summary>
-    private static string[] CleanList(IEnumerable<string> items, string paramName)
+    private static string[] CleanList(IEnumerable<string> items)
     {
         var clean = items
             .Select(item => item.Trim())
@@ -247,12 +383,12 @@ internal sealed class Listing
 
         if (clean.Length > ListMaxItems)
         {
-            throw new ArgumentException($"Najviac {ListMaxItems} položiek.", paramName);
+            throw new DomainException(ListingErrors.TooManyItems);
         }
 
         if (clean.Any(item => item.Length > ListItemMaxLength))
         {
-            throw new ArgumentException($"Položka môže mať najviac {ListItemMaxLength} znakov.", paramName);
+            throw new DomainException(ListingErrors.ItemTooLong);
         }
 
         return clean;

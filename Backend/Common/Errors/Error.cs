@@ -14,6 +14,9 @@ public enum ErrorType
 
     /// <summary>Nesprávne prihlasovacie údaje alebo neplatný token → 401 Unauthorized.</summary>
     Unauthorized,
+
+    /// <summary>Používateľ je prihlásený, ale na túto vec nemá právo (napr. cudzí inzerát) → 403 Forbidden.</summary>
+    Forbidden,
 }
 
 /// <summary>
@@ -29,4 +32,6 @@ public sealed record Error(string Code, string Message, ErrorType Type)
     public static Error Conflict(string code, string message) => new(code, message, ErrorType.Conflict);
 
     public static Error Unauthorized(string code, string message) => new(code, message, ErrorType.Unauthorized);
+
+    public static Error Forbidden(string code, string message) => new(code, message, ErrorType.Forbidden);
 }

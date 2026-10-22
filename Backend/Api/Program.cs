@@ -21,6 +21,11 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     // Čísla iba ako čísla. Predvolene ASP.NET prijíma aj "300" ako text a OpenAPI potom
     // popisuje každé číslo ako „number alebo string“ – vygenerované typy na webe by boli nepresné.
     options.SerializerOptions.NumberHandling = JsonNumberHandling.Strict;
+
+    // Prísne čítanie požiadaviek: chýbajúce povinné pole (napr. "remote") alebo null tam,
+    // kde nesmie byť (napr. "title"), je chyba 400 – nie potichu dosadená predvolená hodnota.
+    options.SerializerOptions.RespectRequiredConstructorParameters = true;
+    options.SerializerOptions.RespectNullableAnnotations = true;
 });
 
 // Popis API (OpenAPI) – zo všetkých endpointov sa automaticky vytvorí /openapi/v1.json.
@@ -42,8 +47,15 @@ builder.Services.AddListingsModule(builder.Configuration);
 
 var app = builder.Build();
 
-// Nečakaná chyba (výnimka) → 500 vo formáte ProblemDetails, bez detailov kódu pre klienta
-app.UseExceptionHandler();
+// Nečakaná chyba (výnimka) → 500 vo formáte ProblemDetails, bez detailov kódu pre klienta.
+// Výnimka: zlá požiadavka (napr. chýbajúce povinné pole v JSON) – ASP.NET ju vo vývoji hlási
+// ako BadHttpRequestException so stavom 400; ten zachováme, inak by z nej bola chybne 500.
+app.UseExceptionHandler(new ExceptionHandlerOptions
+{
+    StatusCodeSelector = exception => exception is BadHttpRequestException badRequest
+        ? badRequest.StatusCode
+        : StatusCodes.Status500InternalServerError,
+});
 app.UseStatusCodePages();
 app.UseCors();
 
