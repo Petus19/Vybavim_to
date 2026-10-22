@@ -337,6 +337,8 @@ Ak je niektorý port na počítači obsadený, zmeň ho v súbore `.env` (je mim
   - [x] ASP.NET Core Identity: registrácia a prihlásenie e-mailom alebo menom, tokeny (access + refresh), role (Admin), `ICurrentUser` pre moduly, testovací admin vo vývoji
   - [ ] overenie e-mailu a zabudnuté heslo (potrebuje frontu úloh), prihlásenie cez Google, profily
 - [ ] Inzeráty: pridanie a zoznam
+  - [x] API: zoznam, detail, pridanie, úprava, stiahnutie (autor / admin), moje inzeráty; slovenské chyby s kódom
+  - [ ] web: formulár na pridanie a úpravu, stránka „moje inzeráty“
 - [ ] Vyhľadávanie a filtre: kategória, cena, lokalita
 - [ ] Odpovede na inzerát a interný chat
 - [ ] Stav projektu: otvorený → prebieha → dokončený

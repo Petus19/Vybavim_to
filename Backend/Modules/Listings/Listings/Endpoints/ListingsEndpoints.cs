@@ -29,7 +29,69 @@ internal static class ListingsEndpoints
             .WithName("GetListing")
             .WithSummary("Detail inzerátu");
 
+        // --- Správa inzerátov: iba pre prihlásených ---
+
+        api.MapPost("/listings", CreateListingAsync)
+            .WithName("CreateListing")
+            .WithSummary("Pridanie inzerátu – autorom je prihlásený používateľ")
+            .RequireAuthorization();
+
+        api.MapPut("/listings/{id:guid}", UpdateListingAsync)
+            .WithName("UpdateListing")
+            .WithSummary("Úprava inzerátu – iba autor a iba kým je otvorený")
+            .RequireAuthorization();
+
+        api.MapPost("/listings/{id:guid}/cancel", CancelListingAsync)
+            .WithName("CancelListing")
+            .WithSummary("Stiahnutie inzerátu – autor alebo admin")
+            .RequireAuthorization();
+
+        api.MapGet("/listings/mine", GetMyListingsAsync)
+            .WithName("GetMyListings")
+            .WithSummary("Moje inzeráty – všetky stavy, najnovšie prvé")
+            .RequireAuthorization();
+
         return app;
+    }
+
+    private static async Task<Results<Created<ListingDetailResponse>, ProblemHttpResult>> CreateListingAsync(
+        ListingInput input,
+        CreateListing handler,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler.HandleAsync(input, cancellationToken);
+        return result.IsSuccess
+            ? TypedResults.Created($"/api/v1/listings/{result.Value.Id}", result.Value)
+            : result.Error!.ToProblem();
+    }
+
+    private static async Task<Results<Ok<ListingDetailResponse>, ProblemHttpResult>> UpdateListingAsync(
+        Guid id,
+        ListingInput input,
+        UpdateListing handler,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler.HandleAsync(id, input, cancellationToken);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.Error!.ToProblem();
+    }
+
+    private static async Task<Results<Ok<ListingDetailResponse>, ProblemHttpResult>> CancelListingAsync(
+        Guid id,
+        CancelListing handler,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler.HandleAsync(id, cancellationToken);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.Error!.ToProblem();
+    }
+
+    private static async Task<Results<Ok<PagedResponse<ListingSummaryResponse>>, ProblemHttpResult>> GetMyListingsAsync(
+        int? page,
+        int? pageSize,
+        GetMyListings handler,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler.HandleAsync(page, pageSize, cancellationToken);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.Error!.ToProblem();
     }
 
     private static async Task<Ok<List<CategoryResponse>>> GetCategoriesAsync(
