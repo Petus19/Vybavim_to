@@ -53,9 +53,13 @@ public static class IdentityModule
             .AddErrorDescriber<SlovakIdentityErrorDescriber>()
             .AddDefaultTokenProviders();                  // neskôr: overenie e-mailu, zabudnuté heslo
 
+        // Prihlásenie cez Google: stačí Client ID (overuje sa ním, že token je pre našu aplikáciu)
+        services.Configure<GoogleAuthOptions>(configuration.GetSection(GoogleAuthOptions.SectionName));
+
         // Prípady použitia
         services.AddScoped<RegisterUser>();
         services.AddScoped<LoginUser>();
+        services.AddScoped<LoginWithGoogle>();
         services.AddScoped<RefreshAccess>();
         services.AddScoped<GetCurrentUser>();
         services.AddScoped<GetUsers>();
