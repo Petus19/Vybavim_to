@@ -79,7 +79,39 @@ Vytvára ho `IdentityDevSeeder` iba v prostredí Development – **na produkčno
 |---|---|---|
 | GET | `/api/v1/categories` | hlavné kategórie (`slug`, `name`, `description`) |
 | GET | `/api/v1/listings` | vyhľadávanie inzerátov s filtrami, zoradením a stránkovaním |
-| GET | `/api/v1/listings/{id}` | detail inzerátu, 404 ak neexistuje |
+| GET | `/api/v1/listings/{id}` | detail inzerátu, 404 ak neexistuje (stiahnutý vidí iba autor a admin) |
+| POST | `/api/v1/listings` | **prihlásený** – pridá inzerát, autorom je prihlásený používateľ → 201 + detail |
+| PUT | `/api/v1/listings/{id}` | **iba autor** – úprava, iba kým je inzerát otvorený → 200 + detail |
+| POST | `/api/v1/listings/{id}/cancel` | **autor alebo admin** – stiahnutie (stav `cancelled`) → 200 + detail |
+| GET | `/api/v1/listings/mine` | **prihlásený** – moje inzeráty vo všetkých stavoch, najnovšie prvé (`page`, `pageSize`) |
+
+Stiahnuté inzeráty sa vo verejnom vyhľadávaní nezobrazujú.
+
+### Pridanie a úprava inzerátu
+
+Telo požiadavky má rovnaký tvar ako detail, takže web môže použiť jeden formulár na pridanie aj úpravu:
+
+```json
+{
+  "category": "grafika",
+  "title": "Logo pre kaviareň",
+  "description": "Hľadáme grafika na logo…",
+  "budget": { "type": "fixed", "amount": 300 },
+  "city": "Bratislava",
+  "remote": true,
+  "deadline": "2026-11-15",
+  "level": "intermediate",
+  "scope": { "size": "medium", "duration": "2–4 týždne" },
+  "engagement": "one_time",
+  "invoiceRequired": true,
+  "skills": ["Branding", "Adobe Illustrator"],
+  "deliverables": ["Logo vo vektoroch"],
+  "requirements": []
+}
+```
+
+- povinné sú všetky polia okrem `city` (ak `remote: true`), `deadline`, `deliverables` a `requirements`; chýbajúce povinné pole → 400
+- pravidlá: názov max. 120 znakov, popis max. 5000, pri `negotiable` bez sumy, inak suma > 0, bez práce na diaľku je mesto povinné, termín nie v minulosti, 1–10 zručností, zoznamy max. 10 položiek po 100 znakov
 
 ### Filtre `GET /api/v1/listings`
 
@@ -120,7 +152,10 @@ Chyby majú formát ProblemDetails (RFC 9457) a pole `code` pre frontend:
 | Stav | Kedy | `code` |
 |---|---|---|
 | 400 | neplatný filter, rozsah ceny alebo stránka | `listing.invalid_filter`, `listing.invalid_sort`, `listing.invalid_range`, `listing.invalid_page` |
+| 400 | porušené pravidlo inzerátu (hláška po slovensky v `title`) | `listing.title_required`, `listing.title_too_long`, `listing.description_required`, `listing.description_too_long`, `listing.duration_required`, `listing.duration_too_long`, `listing.budget_amount_not_allowed`, `listing.budget_amount_required`, `listing.city_required`, `listing.city_too_long`, `listing.deadline_in_past`, `listing.skills_required`, `listing.too_many_items`, `listing.item_too_long`, `listing.unknown_category` |
+| 403 | cudzí inzerát | `listing.not_owner`, `listing.cancel_not_allowed` |
 | 404 | inzerát neexistuje | `listing.not_found` |
+| 409 | inzerát nie je otvorený (úprava, stiahnutie) | `listing.not_editable`, `listing.invalid_status_change` |
 
 ## CORS
 

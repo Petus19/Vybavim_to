@@ -1,11 +1,13 @@
 using Microsoft.EntityFrameworkCore;
+using Vybavim.Common.Auth;
 using Vybavim.Common.Errors;
+using Vybavim.Modules.Listings.Domain;
 using Vybavim.Modules.Listings.Infrastructure;
 
 namespace Vybavim.Modules.Listings.Application;
 
 /// <summary>Prípad použitia: „zobraz detail inzerátu“.</summary>
-internal sealed class GetListingDetail(ListingsDbContext db)
+internal sealed class GetListingDetail(ListingsDbContext db, ICurrentUser currentUser)
 {
     public static readonly Error NotFound = Error.NotFound("listing.not_found", "Inzerát neexistuje.");
 
@@ -36,8 +38,18 @@ internal sealed class GetListingDetail(ListingsDbContext db)
                 l.OwnerId))
             .SingleOrDefaultAsync(cancellationToken);
 
-        return listing is null
-            ? Result.Failure<ListingDetailResponse>(NotFound)
-            : Result.Success(listing);
+        if (listing is null || (listing.Status == ListingStatus.Cancelled && !CanSeeCancelled(listing.OwnerId)))
+        {
+            return Result.Failure<ListingDetailResponse>(NotFound);
+        }
+
+        return Result.Success(listing);
     }
+
+    /// <summary>
+    /// Stiahnutý inzerát vidí iba jeho autor a admin. Pre ostatných „neexistuje“ (404) –
+    /// nemusia vedieť, že tu niečo bolo.
+    /// </summary>
+    private bool CanSeeCancelled(Guid ownerId) =>
+        currentUser.IsAuthenticated && (currentUser.Id == ownerId || currentUser.IsInRole(Roles.Admin));
 }

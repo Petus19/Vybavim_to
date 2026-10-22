@@ -11,8 +11,9 @@ namespace Vybavim.IntegrationTests;
 /// Spustí celé Api ako pri `dotnet run`, ale proti dočasnému PostgreSQL v Dockeri.
 /// Api pri štarte (prostredie Development) aplikuje migrácie a vloží testovacie dáta,
 /// takže testy majú vždy rovnakých 12 inzerátov a 4 kategórie.
+/// Testy, ktoré inzeráty pridávajú, používajú <see cref="WritableApiFactory"/> s vlastnou databázou.
 /// </summary>
-public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
+public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
     // Rovnaká verzia PostgreSQL ako v docker-compose.yml
     private readonly PostgreSqlContainer _database = new PostgreSqlBuilder("postgres:17.11").Build();
@@ -33,6 +34,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     {
         await base.DisposeAsync();
         await _database.DisposeAsync();
+        GC.SuppressFinalize(this);   // štandardný vzor upratovania pri triede, z ktorej sa dá dediť
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)

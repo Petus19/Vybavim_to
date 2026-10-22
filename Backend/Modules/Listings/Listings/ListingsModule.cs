@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Vybavim.Common.Database;
 using Vybavim.Common.Extensions;
 using Vybavim.Modules.Listings.Application;
@@ -20,11 +21,16 @@ public static class ListingsModule
     public static IServiceCollection AddListingsModule(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddModuleDbContext<ListingsDbContext>(configuration, ListingsDbContext.SchemaName);
+        services.TryAddSingleton(TimeProvider.System);   // hodiny pre čas vytvorenia a úpravy
 
         // Prípady použitia – endpointy si ich vypýtajú cez Dependency Injection
         services.AddScoped<GetCategories>();
         services.AddScoped<SearchListings>();
         services.AddScoped<GetListingDetail>();
+        services.AddScoped<CreateListing>();
+        services.AddScoped<UpdateListing>();
+        services.AddScoped<CancelListing>();
+        services.AddScoped<GetMyListings>();
 
         // Testovacie inzeráty – spustí ich Api iba vo vývoji (SeedDevDataAsync).
         services.AddScoped<IDevDataSeeder, ListingsDevSeeder>();
