@@ -11,9 +11,15 @@ var builder = WebApplication.CreateBuilder(args);
 // Chyby vo formáte ProblemDetails (RFC 9457): { "status": 404, "title": "…", … }
 builder.Services.AddProblemDetails();
 
-// Enumy v JSON ako text v tvare snake_case: InProgress → "in_progress", OneTime → "one_time"
 builder.Services.ConfigureHttpJsonOptions(options =>
-    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower)));
+{
+    // Enumy v JSON ako text v tvare snake_case: InProgress → "in_progress", OneTime → "one_time"
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower));
+
+    // Čísla iba ako čísla. Predvolene ASP.NET prijíma aj "300" ako text a OpenAPI potom
+    // popisuje každé číslo ako „number alebo string“ – vygenerované typy na webe by boli nepresné.
+    options.SerializerOptions.NumberHandling = JsonNumberHandling.Strict;
+});
 
 // Popis API (OpenAPI) – zo všetkých endpointov sa automaticky vytvorí /openapi/v1.json
 builder.Services.AddOpenApi();

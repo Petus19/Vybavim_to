@@ -1,10 +1,12 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import Form from "next/form";
 import { Search } from "lucide-react";
 import { CategoryIcon } from "@/components/category-icon";
 import { ChevronLink } from "@/components/chevron-link";
-import { ListingCard } from "@/components/listing-card";
-import { categories, getListings } from "@/lib/listings";
+import { ListingCard, ListingCardSkeleton } from "@/components/listing-card";
+import { getCategories, searchListings } from "@/lib/api";
+import { categoryName } from "@/lib/listings";
 
 const steps = [
   { title: "Zadaj inzerát", text: "Popíš, čo potrebuješ, rozpočet a termín." },
@@ -13,10 +15,6 @@ const steps = [
 ];
 
 export default function HomePage() {
-  const latest = getListings()
-    .filter((l) => l.status === "open")
-    .slice(0, 3);
-
   return (
     <>
       <section className="mx-auto max-w-3xl px-5 pt-20 pb-16 text-center sm:pt-28">
@@ -64,17 +62,14 @@ export default function HomePage() {
             Čo potrebuješ vybaviť?
           </h2>
           <div className="mt-10 grid grid-cols-2 gap-4 lg:grid-cols-4">
-            {categories.map((c) => (
-              <Link
-                key={c.id}
-                href={`/inzeraty?kategoria=${c.id}`}
-                className="group rounded-3xl bg-background p-6 transition-transform duration-300 hover:scale-[1.02]"
-              >
-                <CategoryIcon category={c.id} className="size-7 text-brand" strokeWidth={1.5} />
-                <p className="mt-6 font-semibold tracking-tight">{c.name}</p>
-                <p className="mt-1 text-sm text-muted-foreground">{c.description}</p>
-              </Link>
-            ))}
+            {/* Kategórie aj inzeráty sú z API – načítajú sa pri požiadavke, preto Suspense */}
+            <Suspense
+              fallback={Array.from({ length: 4 }, (_, i) => (
+                <div key={i} className="h-40 animate-pulse rounded-3xl bg-background" />
+              ))}
+            >
+              <CategoryTiles />
+            </Suspense>
           </div>
         </div>
       </section>
@@ -85,9 +80,13 @@ export default function HomePage() {
           <ChevronLink href="/inzeraty">Všetky inzeráty</ChevronLink>
         </div>
         <div className="mt-8 grid gap-4 md:grid-cols-3">
-          {latest.map((l) => (
-            <ListingCard key={l.id} listing={l} />
-          ))}
+          <Suspense
+            fallback={Array.from({ length: 3 }, (_, i) => (
+              <ListingCardSkeleton key={i} />
+            ))}
+          >
+            <LatestListings />
+          </Suspense>
         </div>
       </section>
 
@@ -107,4 +106,31 @@ export default function HomePage() {
       </section>
     </>
   );
+}
+
+async function CategoryTiles() {
+  const categories = await getCategories();
+  return categories.map((c) => (
+    <Link
+      key={c.slug}
+      href={`/inzeraty?kategoria=${c.slug}`}
+      className="group rounded-3xl bg-background p-6 transition-transform duration-300 hover:scale-[1.02]"
+    >
+      <CategoryIcon category={c.slug} className="size-7 text-brand" strokeWidth={1.5} />
+      <p className="mt-6 font-semibold tracking-tight">{c.name}</p>
+      <p className="mt-1 text-sm text-muted-foreground">{c.description}</p>
+    </Link>
+  ));
+}
+
+async function LatestListings() {
+  const [categories, result] = await Promise.all([
+    getCategories(),
+    searchListings({ openOnly: true, sort: "newest", pageSize: 3 }),
+  ]);
+  if (!result.ok) return null;
+
+  return result.page.items.map((l) => (
+    <ListingCard key={l.id} listing={l} categoryName={categoryName(categories, l.category)} />
+  ));
 }

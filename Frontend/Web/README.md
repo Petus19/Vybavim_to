@@ -4,19 +4,21 @@ Frontend platformy: **Next.js 16** (React, TypeScript), Tailwind CSS 4 a kompone
 
 Biznis logika sem nepatrí. Web volá API cez typovaného klienta z [`Shared/`](../Shared/README.md).
 
-> **Stav:** ukážková verzia na **mock dátach** (`src/lib/listings.ts`). Keď backend sprístupní `GET /api/v1/listings`, mock nahradí klient vygenerovaný z OpenAPI a stránky zostanú rovnaké.
+> **Stav:** web zobrazuje skutočné dáta z backendového API (`Backend/Api`). Kategórie a inzeráty sa načítavajú z `GET /api/v1/categories`, `/listings` a `/listings/{id}`.
 
 ## Spustenie
 
-Verzia Node je v `.nvmrc` (Node 24). S `fnm` sa prepne automaticky pri vstupe do priečinka.
+Web potrebuje bežiace API. Verzia Node je v `.nvmrc` (Node 24), s `fnm` sa prepne automaticky.
 
 ```bash
-cd Frontend/Web
-npm install
-npm run dev
+docker compose up -d                 # v koreni repozitára – databáza
+cd Backend && dotnet run --project Api   # API na http://localhost:5080
+cd Frontend/Web && npm install && npm run dev
 ```
 
-Web beží na http://localhost:3000.
+Web beží na http://localhost:3000. Ak API nebeží, stránka ukáže „Niečo sa nepodarilo“ s návodom (`src/app/error.tsx`).
+
+Adresa API sa dá zmeniť v `.env.local` (vzor `.env.example`): `API_URL=http://localhost:5080`.
 
 | Príkaz              | Čo robí                                                      |
 | ------------------- | ------------------------------------------------------------ |
@@ -25,19 +27,28 @@ Web beží na http://localhost:3000.
 | `npm run lint`      | ESLint                                                       |
 | `npm run typecheck` | kontrola typov                                               |
 | `npm run format`    | naformátuje kód (Prettier + zoradenie Tailwind tried)        |
+| `npm run api:types` | pregeneruje typy API z OpenAPI (API musí bežať)              |
+
+## Napojenie na API
+
+- **`src/lib/api.ts`** – jediné miesto, kde web volá API. Klient [`openapi-fetch`](https://openapi-ts.dev/openapi-fetch/) s typmi z `Frontend/Shared/api/schema.d.ts`, takže TypeScript skontroluje adresy, parametre aj odpovede.
+- **Volá sa iba zo servera** (Server Components), preto nie je potrebný CORS a adresa API (`API_URL`) nie je v prehliadači.
+- **Dáta sa načítavajú pri požiadavke**, nie pri `next build` (`connection()` v `api.ts`). Build aj CI preto nepotrebujú bežiace API. Komponenty, ktoré volajú API, musia byť v `<Suspense>`.
+- **Chyby:** neplatný filter (400) ukáže správu v zozname, neexistujúci inzerát (404) stránku „nenašli sme“, nedostupné API chybovú stránku s tlačidlom _Skúsiť znova_.
+- Po zmene API v backende: `npm run api:types` a commitnúť `Frontend/Shared/api/schema.d.ts`.
 
 ## Stránky
 
-| URL                               | Súbor                            | Obsah                                                                                     |
-| --------------------------------- | -------------------------------- | ----------------------------------------------------------------------------------------- |
-| `/`                               | `src/app/page.tsx`               | úvod: vyhľadávanie, kategórie, najnovšie inzeráty, ako to funguje                         |
-| `/inzeraty`                       | `src/app/inzeraty/page.tsx`      | zoznam s vyhľadávaním, kategóriami, panelom „Filtre“ a zoradením                          |
-| `/inzeraty/[id]`                  | `src/app/inzeraty/[id]/page.tsx` | detail: fakty v dlaždiciach, výsledky, zručnosti, požiadavky, zadávateľ, podobné inzeráty |
-| `/prihlasenie`, `/pridat-inzerat` |                                  | zatiaľ „pripravujeme“                                                                     |
+| URL                               | Súbor                            | Obsah                                                                          |
+| --------------------------------- | -------------------------------- | ------------------------------------------------------------------------------ |
+| `/`                               | `src/app/page.tsx`               | úvod: vyhľadávanie, kategórie, najnovšie inzeráty, ako to funguje              |
+| `/inzeraty`                       | `src/app/inzeraty/page.tsx`      | zoznam s vyhľadávaním, kategóriami, panelom „Filtre“ a zoradením               |
+| `/inzeraty/[id]`                  | `src/app/inzeraty/[id]/page.tsx` | detail: fakty v dlaždiciach, výsledky, zručnosti, požiadavky, podobné inzeráty |
+| `/prihlasenie`, `/pridat-inzerat` |                                  | zatiaľ „pripravujeme“                                                          |
 
 ### Filtre inzerátov (parametre v URL)
 
-Filtre sú v URL, takže sa výsledok dá zdieľať odkazom. Prázdne polia sa do URL nepridávajú (`src/components/search-form.tsx`).
+Filtre sú v URL, takže sa výsledok dá zdieľať odkazom. Prázdne polia sa do URL nepridávajú (`src/components/search-form.tsx`). Web ich prekladá na parametre API (`toApiQuery()` v `src/app/inzeraty/page.tsx`, prehľad je v `Backend/Api/README.md`).
 
 | Parameter                | Hodnoty                            | Význam                                                   |
 | ------------------------ | ---------------------------------- | -------------------------------------------------------- |
@@ -52,27 +63,16 @@ Filtre sú v URL, takže sa výsledok dá zdieľať odkazom. Prázdne polia sa d
 | `na_dialku`, `otvorene`  | `1`                                | iba práca na diaľku / iba otvorené inzeráty              |
 | `bez_faktury`            | `1`                                | iba inzeráty, ktoré nevyžadujú faktúru                   |
 | `zoradit`                | `najlacnejsie`, `najdrahsie`       | zoradenie (predvolené: najnovšie)                        |
+| `strana`                 | číslo                              | stránkovanie (24 inzerátov na stranu)                    |
 
-### Údaje inzerátu
+Pevná cena a hodinová sadzba sa **nikdy navzájom neporovnávajú** – rozsahy aj zoradenie podľa ceny rieši backend (`SearchListings`).
 
-Okrem názvu, popisu a rozpočtu má inzerát (typ `Listing` v `src/lib/listings.ts`) tieto polia, ktoré treba dohodnúť s backendom pre modul `Listings`:
+### Čo z API ešte chýba
 
-| Pole                                                            | Povinné | Význam                                                           |
-| --------------------------------------------------------------- | ------- | ---------------------------------------------------------------- |
-| `level`                                                         | áno     | očakávaná úroveň: začiatočník / skúsený / expert                 |
-| `scope`                                                         | áno     | veľkosť projektu (malý / stredný / veľký) a odhad trvania        |
-| `engagement`                                                    | áno     | jednorazovo / dlhodobo                                           |
-| `invoiceRequired`                                               | áno     | či zadávateľ potrebuje faktúru (živnosť alebo firma)             |
-| `skills`                                                        | áno     | zručnosti ako štítky (vyhľadávanie, filtre, neskôr AI párovanie) |
-| `deliverables`                                                  | nie     | čo má byť výsledkom                                              |
-| `requirements`                                                  | nie     | požiadavky na odborníka (prax, portfólio, jazyk)                 |
-| `owner.verified`, `projectCount`, `memberSince`, `responseTime` | áno     | dôveryhodnosť zadávateľa                                         |
-
-Voliteľné sekcie sa na detaile zobrazia iba vtedy, keď sú vyplnené. Pri pridávaní inzerátu ich preto netreba vypĺňať, aby formulár neodradil. Prílohy, otázky pre uchádzačov a polia podľa kategórie (JSONB) prídu v ďalšej verzii.
-
-### Ceny
-
-Pevná cena a hodinová sadzba sa **nikdy navzájom neporovnávajú**. Keď je zadaný rozsah iba pre sadzbu, zobrazia sa len inzeráty s hodinovou sadzbou (a naopak). Pri zoradení podľa ceny idú najprv pevné ceny, potom hodinové sadzby a nakoniec „dohodou“. Logika je v `getListings()` v `src/lib/listings.ts`.
+- **Zadávateľ** (meno, hodnotenie, overenie, počet projektov) – API vracia iba `ownerId`. Karta zadávateľa na detaile je preto zatiaľ skrytá, pribudne s modulmi Identity, Profiles a Reviews.
+- **Počet ponúk** na inzerát – pribudne s odpoveďami na inzeráty (modul Projects).
+- **Zoznam miest** pre filter – je zatiaľ napevno v `src/lib/listings.ts`.
+- Prílohy, otázky pre uchádzačov a polia podľa kategórie (JSONB) – ďalšia verzia.
 
 ## Dizajn
 
@@ -101,7 +101,7 @@ Riadime sa princípmi [Apple Human Interface Guidelines](https://developer.apple
 
 ## Next.js 16: na čo si dať pozor
 
-Táto verzia má zapnuté **Cache Components** (`next.config.ts`). `params` a `searchParams` sú `Promise` a komponent, ktorý ich číta, musí byť v `<Suspense>`. Inak dev server hlási, že navigácia nebude okamžitá. Vzor nájdeš v `src/app/inzeraty/page.tsx`. Aktuálna dokumentácia je v `node_modules/next/dist/docs/`.
+Táto verzia má zapnuté **Cache Components** (`next.config.ts`). `params` a `searchParams` sú `Promise` a komponent, ktorý ich číta (alebo volá API), musí byť v `<Suspense>`. Inak dev server hlási, že navigácia nebude okamžitá. Vzor nájdeš v `src/app/inzeraty/page.tsx`. Aktuálna dokumentácia je v `node_modules/next/dist/docs/`.
 
 Ak sa zmena v `src/app/globals.css` neprejaví (napr. nové farby), dev server ju nezachytil. Zastav ho, zmaž cache a spusti znova:
 

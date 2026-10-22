@@ -54,14 +54,18 @@ docker compose up -d
 
 Spustí PostgreSQL, Redis, RustFS a Mailpit. Adresy a prihlasovacie údaje sú v časti [Docker](#docker). Ak je niektorý port obsadený, skopíruj `.env.example` do `.env` a port v ňom zmeň.
 
-### 4. Skompiluj backend
+### 4. Spusti backend (API)
 
 ```bash
 cd Backend
-dotnet build
+dotnet run --project Api
 ```
 
+API beží na http://localhost:5080 (dokumentácia na `/scalar`). Pri štarte sa aplikujú migrácie a naplnia sa testovacie dáta.
+
 ### 5. Spusti web
+
+V druhom termináli:
 
 ```bash
 cd Frontend/Web
@@ -69,7 +73,7 @@ npm install
 npm run dev
 ```
 
-Web beží na http://localhost:3000 (zatiaľ na mock dátach). Podrobnosti sú vo [`Frontend/Web/README.md`](Frontend/Web/README.md).
+Web beží na http://localhost:3000 a načítava dáta z API. Podrobnosti sú vo [`Frontend/Web/README.md`](Frontend/Web/README.md).
 
 ### Bežná práca
 
