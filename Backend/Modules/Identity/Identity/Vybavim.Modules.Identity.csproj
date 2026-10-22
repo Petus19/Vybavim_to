@@ -8,4 +8,8 @@
     <ProjectReference Include="../../../Common/Vybavim.Common.csproj" />
     <ProjectReference Include="../Identity.Contracts/Vybavim.Modules.Identity.Contracts.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- ASP.NET Core Identity uložené v PostgreSQL cez EF Core: používatelia, heslá, role -->
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" />
+  </ItemGroup>
 </Project>

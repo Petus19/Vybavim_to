@@ -7,7 +7,7 @@ namespace Vybavim.Common.Database;
 /// Každý modul má vlastnú PostgreSQL schému (napr. "listings"), takže jeho tabuľky
 /// sú oddelené od tabuliek iných modulov.
 /// </summary>
-public abstract class BaseDbContext(DbContextOptions options) : DbContext(options)
+public abstract class BaseDbContext(DbContextOptions options) : DbContext(options), IModuleDbContext
 {
     /// <summary>Názov PostgreSQL schémy modulu, napr. "listings".</summary>
     public abstract string Schema { get; }
