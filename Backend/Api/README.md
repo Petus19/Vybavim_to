@@ -36,6 +36,7 @@ Používateľov, heslá a role spravuje **ASP.NET Core Identity** (modul `Identi
 |---|---|---|---|
 | POST | `/api/v1/auth/register` | ktokoľvek | `{ "email", "password" }` → 201 + údaje o používateľovi |
 | POST | `/api/v1/auth/login` | ktokoľvek | `{ "login", "password" }` – login je e-mail alebo meno → tokeny |
+| POST | `/api/v1/auth/google` | ktokoľvek | `{ "idToken" }` – ID token od Google → rovnaké tokeny ako pri hesle |
 | POST | `/api/v1/auth/refresh` | ktokoľvek | `{ "refreshToken" }` → nové tokeny |
 | GET | `/api/v1/auth/me` | prihlásený | kto som: `id`, `userName`, `email`, `roles` |
 | GET | `/api/v1/users` | iba **Admin** | zoznam všetkých používateľov s rolami |
@@ -50,6 +51,17 @@ Odpoveď prihlásenia:
 - **refreshToken** platí 14 dní a slúži iba na získanie nového accessTokenu (`/auth/refresh`).
 - **Heslo:** aspoň 8 znakov, veľké a malé písmeno, číslica. Po 5 zlých heslách sa účet na 15 minút zablokuje.
 - Chyby: `identity.registration_failed` (400, hláška po slovensky), `identity.invalid_credentials`, `identity.locked_out`, `identity.invalid_refresh_token` (401). Bez tokenu 401, bez oprávnenia 403.
+
+### Prihlásenie cez Google
+
+Web si od Google vypýta **ID token** (OAuth s PKCE, `Frontend/Web/src/app/prihlasenie/google/`) a pošle ho na `POST /api/v1/auth/google`. API (`LoginWithGoogle`):
+
+1. overí podpis tokenu u Google a že bol vydaný pre **náš Client ID** (`Authentication:Google:ClientId` v `appsettings.Development.json`, nie je tajný),
+2. odmietne Google účet s neovereným e-mailom,
+3. nájde používateľa podľa prepojenia s Google (`identity.user_logins`); pri prvom prihlásení pripojí Google k existujúcemu účtu s rovnakým e-mailom, inak vytvorí **nový účet bez hesla**,
+4. vráti rovnaké tokeny ako pri prihlásení heslom.
+
+Chyby: `identity.invalid_google_token`, `identity.google_email_not_verified` (401), `identity.google_not_configured` (400 – chýba Client ID). **Client secret** API nepotrebuje, ten má iba web (`Frontend/Web/.env.local`).
 
 ### Testovací admin (iba vo vývoji)
 

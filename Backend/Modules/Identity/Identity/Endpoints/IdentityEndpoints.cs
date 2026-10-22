@@ -26,6 +26,11 @@ internal static class IdentityEndpoints
             .WithSummary("Prihlásenie – vráti prístupový a refresh token")
             .Produces<AccessTokenResponse>();
 
+        auth.MapPost("/google", LoginWithGoogleAsync)
+            .WithName("LoginWithGoogle")
+            .WithSummary("Prihlásenie cez Google – ID token od Google vymení za naše tokeny")
+            .Produces<AccessTokenResponse>();
+
         auth.MapPost("/refresh", RefreshAsync)
             .WithName("RefreshToken")
             .WithSummary("Nový prístupový token podľa refresh tokenu")
@@ -60,6 +65,17 @@ internal static class IdentityEndpoints
     private static async Task<Results<SignInHttpResult, ProblemHttpResult>> LoginAsync(
         LoginRequest request,
         LoginUser handler)
+    {
+        var result = await handler.HandleAsync(request);
+        return result.IsSuccess
+            ? TypedResults.SignIn(result.Value, authenticationScheme: IdentityConstants.BearerScheme)
+            : result.Error!.ToProblem();
+    }
+
+    // Rovnaké tokeny ako pri prihlásení heslom – web s nimi ďalej zaobchádza úplne rovnako
+    private static async Task<Results<SignInHttpResult, ProblemHttpResult>> LoginWithGoogleAsync(
+        GoogleLoginRequest request,
+        LoginWithGoogle handler)
     {
         var result = await handler.HandleAsync(request);
         return result.IsSuccess

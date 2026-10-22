@@ -11,5 +11,7 @@
   <ItemGroup>
     <!-- ASP.NET Core Identity uložené v PostgreSQL cez EF Core: používatelia, heslá, role -->
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" />
+    <!-- Overenie ID tokenu z „Prihlásiť sa cez Google“ (podpis, platnosť, pre ktorú aplikáciu je) -->
+    <PackageReference Include="Google.Apis.Auth" />
   </ItemGroup>
 </Project>

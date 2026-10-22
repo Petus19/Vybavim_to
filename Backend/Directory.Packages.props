@@ -10,6 +10,7 @@
   </ItemGroup>
   <ItemGroup Label="Prihlásenie">
     <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.13" />
+    <PackageVersion Include="Google.Apis.Auth" Version="1.77.0" />
   </ItemGroup>
   <ItemGroup Label="API dokumentácia">
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.13" />
