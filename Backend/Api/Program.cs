@@ -31,7 +31,21 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 
 // Popis API (OpenAPI) – zo všetkých endpointov sa automaticky vytvorí /openapi/v1.json.
 // Transformer doplní prihlasovanie tokenom, aby sa dalo skúšať aj v Scalar.
-builder.Services.AddOpenApi(options => options.AddDocumentTransformer<BearerSecuritySchemeTransformer>());
+builder.Services.AddOpenApi(options =>
+{
+    options.AddDocumentTransformer<BearerSecuritySchemeTransformer>();
+
+    // Nadpis a popis dokumentácie (zobrazí sa v Scalar)
+    options.AddDocumentTransformer((document, _, _) =>
+    {
+        document.Info.Title = "Vybavím to API";
+        document.Info.Description =
+            "REST API of the Vybavím to service marketplace (modular monolith, ASP.NET Core / .NET 10). " +
+            "Sign in with POST /api/v1/auth/login, then use the accessToken as a Bearer token. " +
+            "Errors are RFC 9457 ProblemDetails with a machine-readable `code`; user-facing messages are in Slovak.";
+        return Task.CompletedTask;
+    });
+});
 
 // Web beží na inej adrese (localhost:3000) – prehliadač mu musí dovoliť volať API.
 // Povolené adresy sú v appsettings (Cors:AllowedOrigins).
@@ -79,8 +93,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.MapGet("/api/v1/health", () => Results.Ok(new { status = "ok" }))
-    .WithTags("Systém")
-    .WithSummary("Kontrola, či API beží");
+    .WithTags("System")
+    .WithSummary("Health check");
 
 app.MapIdentityEndpoints();
 app.MapProfilesEndpoints();

@@ -1,5 +1,5 @@
-# Automatická kontrola pri každom pull requeste a pri zmene v main.
-# Ak niektorý krok zlyhá, PR na GitHube ukáže červený krížik ešte pred zlúčením.
+# Runs on every pull request and on every push to main.
+# If any step fails, the pull request shows a red cross before it can be merged.
 
 name: CI
 
@@ -8,66 +8,66 @@ on:
   push:
     branches: [main]
 
-# Iba čítanie repozitára – workflow nič nemení
+# Read-only access – the workflow changes nothing
 permissions:
   contents: read
 
-# Keď do PR príde nový commit, predchádzajúca (ešte bežiaca) kontrola sa zruší
+# A new commit in a PR cancels the previous, still running check
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   backend:
-    name: Backend (build + testy)
+    name: Backend (build + tests)
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: Backend
     steps:
-      - name: Stiahnutie kódu
+      - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Inštalácia .NET (verzia z global.json)
+      - name: Set up .NET (version from global.json)
         uses: actions/setup-dotnet@v6
         with:
           global-json-file: Backend/global.json
 
-      - name: Obnovenie balíkov
+      - name: Restore packages
         run: dotnet restore Vybavim.slnx
 
-      - name: Build (varovania = chyby)
+      - name: Build (warnings as errors)
         run: dotnet build Vybavim.slnx --no-restore --configuration Release
 
-      # Unit, architektonické aj integračné testy. Integračné si spustia PostgreSQL
-      # v Dockeri (Testcontainers) – Docker je na GitHub runneri predinštalovaný.
-      - name: Testy
+      # Unit, architecture and integration tests. Integration tests start their own PostgreSQL
+      # in Docker (Testcontainers) – Docker is preinstalled on the GitHub runner.
+      - name: Tests
         run: dotnet test --no-build --configuration Release
 
   web:
-    name: Web (lint + typy + build)
+    name: Web (lint + types + build)
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: Frontend/Web
     steps:
-      - name: Stiahnutie kódu
+      - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Inštalácia Node (verzia z .nvmrc)
+      - name: Set up Node (version from .nvmrc)
         uses: actions/setup-node@v7
         with:
           node-version-file: Frontend/Web/.nvmrc
           cache: npm
           cache-dependency-path: Frontend/Web/package-lock.json
 
-      - name: Inštalácia balíkov (presne podľa package-lock.json)
+      - name: Install packages (exactly as in package-lock.json)
         run: npm ci
 
       - name: Lint
         run: npm run lint
 
-      - name: Kontrola typov
+      - name: Type check
         run: npm run typecheck
 
       - name: Build

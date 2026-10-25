@@ -1,5 +1,10 @@
-# AiService *(neskôr, Fáza 2–3)*
+# AiService *(planned – phase 2–3)*
 
-Samostatná služba v **Pythone (FastAPI)** pre AI a ML: párovanie, sémantické vyhľadávanie, asistent pri písaní inzerátu, moderácia a detekcia podvodov.
+A separate **Python (FastAPI)** service for AI and machine-learning features:
 
-Nepristupuje priamo k databáze. Prihlasuje sa na doménové udalosti a volá verejné API modulov.
+- semantic search ("logo for a café" finds graphic designers) using embeddings stored in PostgreSQL with **pgvector**
+- matching specialists to listings and recommendations
+- an LLM assistant that helps users write a listing
+- content moderation (spam, scams) and fraud detection
+
+It will not access the database directly: it subscribes to domain events (e.g. `ListingCreated`) and calls the public module APIs, so it has the same permissions as a regular user. The PostgreSQL image already includes pgvector.

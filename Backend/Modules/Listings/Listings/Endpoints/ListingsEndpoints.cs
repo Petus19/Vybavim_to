@@ -15,40 +15,40 @@ internal static class ListingsEndpoints
 {
     public static IEndpointRouteBuilder Map(IEndpointRouteBuilder app)
     {
-        var api = app.MapGroup("/api/v1").WithTags("Inzeráty");
+        var api = app.MapGroup("/api/v1").WithTags("Listings");
 
         api.MapGet("/categories", GetCategoriesAsync)
             .WithName("GetCategories")
-            .WithSummary("Zoznam hlavných kategórií");
+            .WithSummary("List main categories");
 
         api.MapGet("/listings", SearchListingsAsync)
             .WithName("SearchListings")
-            .WithSummary("Vyhľadávanie inzerátov s filtrami a zoradením");
+            .WithSummary("Search listings with filters, sorting and paging");
 
         api.MapGet("/listings/{id:guid}", GetListingAsync)
             .WithName("GetListing")
-            .WithSummary("Detail inzerátu");
+            .WithSummary("Listing detail, including the author's profile");
 
         // --- Správa inzerátov: iba pre prihlásených ---
 
         api.MapPost("/listings", CreateListingAsync)
             .WithName("CreateListing")
-            .WithSummary("Pridanie inzerátu – autorom je prihlásený používateľ")
+            .WithSummary("Create a listing – the signed-in user becomes its author")
             .RequireAuthorization();
 
         api.MapPut("/listings/{id:guid}", UpdateListingAsync)
             .WithName("UpdateListing")
-            .WithSummary("Úprava inzerátu – iba autor a iba kým je otvorený")
+            .WithSummary("Update a listing – author only, while the listing is open")
             .RequireAuthorization();
 
         api.MapPost("/listings/{id:guid}/cancel", CancelListingAsync)
             .WithName("CancelListing")
-            .WithSummary("Stiahnutie inzerátu – autor alebo admin")
+            .WithSummary("Withdraw a listing – author or admin")
             .RequireAuthorization();
 
         api.MapGet("/listings/mine", GetMyListingsAsync)
             .WithName("GetMyListings")
-            .WithSummary("Moje inzeráty – všetky stavy, najnovšie prvé")
+            .WithSummary("My listings – all statuses, newest first")
             .RequireAuthorization();
 
         return app;
