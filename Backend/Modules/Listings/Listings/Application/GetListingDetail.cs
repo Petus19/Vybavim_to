@@ -3,11 +3,12 @@ using Vybavim.Common.Auth;
 using Vybavim.Common.Errors;
 using Vybavim.Modules.Listings.Domain;
 using Vybavim.Modules.Listings.Infrastructure;
+using Vybavim.Modules.Profiles.Contracts;
 
 namespace Vybavim.Modules.Listings.Application;
 
-/// <summary>Prípad použitia: „zobraz detail inzerátu“.</summary>
-internal sealed class GetListingDetail(ListingsDbContext db, ICurrentUser currentUser)
+/// <summary>Prípad použitia: „zobraz detail inzerátu“ – vrátane karty autora z modulu Profiles.</summary>
+internal sealed class GetListingDetail(ListingsDbContext db, ICurrentUser currentUser, IProfilesApi profiles)
 {
     public static readonly Error NotFound = Error.NotFound("listing.not_found", "Inzerát neexistuje.");
 
@@ -35,12 +36,21 @@ internal sealed class GetListingDetail(ListingsDbContext db, ICurrentUser curren
                 l.Skills,
                 l.Deliverables,
                 l.Requirements,
-                l.OwnerId))
+                l.OwnerId,
+                null))   // autora doplníme nižšie – jeho údaje sú v inom module
             .SingleOrDefaultAsync(cancellationToken);
 
         if (listing is null || (listing.Status == ListingStatus.Cancelled && !CanSeeCancelled(listing.OwnerId)))
         {
             return Result.Failure<ListingDetailResponse>(NotFound);
+        }
+
+        // Autor inzerátu z modulu Profiles – cez jeho kontrakt, nie cez jeho tabuľky
+        var owners = await profiles.GetSummariesAsync([listing.OwnerId], cancellationToken);
+        if (owners.TryGetValue(listing.OwnerId, out var owner))
+        {
+            // "with" = kópia záznamu, v ktorej sa zmení iba Owner (record sa nedá meniť priamo)
+            listing = listing with { Owner = new ListingOwnerResponse(owner.UserId, owner.DisplayName, owner.Type, owner.City) };
         }
 
         return Result.Success(listing);
