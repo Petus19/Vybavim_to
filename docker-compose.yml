@@ -1,16 +1,16 @@
-# Vývojové prostredie – spustenie: docker compose up -d
-# Prihlasovacie údaje nižšie sú iba pre lokálny vývoj.
-# Porty na localhoste sa dajú zmeniť v súbore .env (vzor: .env.example), ak sú na počítači obsadené.
-# Verzie image sú zafixované, aby sme mali všetci rovnaké prostredie – meniť iba vedome cez PR.
+# Development environment – start with: docker compose up -d
+# The credentials below are for local development only.
+# Host ports can be changed in .env (template: .env.example) if they are taken on your machine.
+# Image versions are pinned so everyone has the same environment – change them only via a PR.
 
 services:
-  # --- Aplikácie (doplnia sa s kostrou backendu vo Fáze 0) ---
+  # --- Applications (planned: currently run with dotnet run / npm run dev) ---
   # web:         # Next.js – frontend
-  # api:         # ASP.NET Core – REST API + WebSockety
-  # worker:      # rovnaký kód ako api – úlohy z fronty
-  # ai-service:  # Python / FastAPI (neskôr)
+  # api:         # ASP.NET Core – REST API
+  # worker:      # same code as api – background jobs
+  # ai-service:  # Python / FastAPI (later)
 
-  # --- Infraštruktúra ---
+  # --- Infrastructure ---
   db:
     build:
       context: .
@@ -40,7 +40,7 @@ services:
     volumes:
       - redis-data:/data
 
-  storage: # RustFS – S3-kompatibilné úložisko súborov (v produkcii S3)
+  storage: # RustFS – S3-compatible file storage (S3 in production)
     image: rustfs/rustfs:1.0.1
     environment:
       RUSTFS_ACCESS_KEY: vybavim
@@ -50,15 +50,15 @@ services:
       RUSTFS_CONSOLE_ADDRESS: ":9001"
     ports:
       - "${STORAGE_PORT:-9000}:9000" # S3 API
-      - "${STORAGE_CONSOLE_PORT:-9001}:9001" # webová konzola
+      - "${STORAGE_CONSOLE_PORT:-9001}:9001" # web console
     volumes:
       - storage-data:/data
 
   mailpit:
     image: axllent/mailpit:v1.31.4
     ports:
-      - "${SMTP_PORT:-2525}:1025" # SMTP (nie 1025 – ten na Macu obsadzuje napr. Synology Drive)
-      - "${MAILPIT_PORT:-8025}:8025" # webové rozhranie
+      - "${SMTP_PORT:-2525}:1025" # SMTP (not 1025 – often taken on macOS, e.g. by Synology Drive)
+      - "${MAILPIT_PORT:-8025}:8025" # web UI
 
 volumes:
   db-data:

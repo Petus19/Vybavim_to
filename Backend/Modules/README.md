@@ -1,27 +1,34 @@
 # Modules
 
-Moduly modulárneho monolitu. Každý modul tvoria **dva projekty**:
+The modules of the modular monolith. Each module consists of **two projects**:
 
 ```
 Listings/
-├── Listings/                 # Vybavim.Modules.Listings – implementácia, všetko internal
-│   ├── Endpoints/            # REST endpointy /api/v1/… pre web a mobil (Minimal APIs)
-│   ├── Application/          # prípady použitia („pridaj inzerát“, „odpovedz na inzerát“)
-│   ├── Domain/               # entity a biznis pravidlá
-│   └── Infrastructure/       # DbContext modulu (iba jeho schéma), migrácie, externé služby
-└── Listings.Contracts/       # Vybavim.Modules.Listings.Contracts – kontrakt pre ostatné moduly
-                              # rozhrania, DTO, integračné udalosti
+├── Listings/                 # Vybavim.Modules.Listings – implementation, everything internal
+│   ├── Endpoints/            # REST endpoints /api/v1/… (Minimal APIs)
+│   ├── Application/          # use cases ("create a listing", "search listings")
+│   ├── Domain/               # entities and business rules
+│   └── Infrastructure/       # the module's DbContext (its own schema only), migrations, dev seed data
+└── Listings.Contracts/       # Vybavim.Modules.Listings.Contracts – the contract for other modules:
+                              # interfaces, DTOs, integration events
 ```
 
-**Pravidlá:**
+| Module | Status |
+|---|---|
+| `Identity` | ✅ accounts, password and Google sign-in, tokens, roles |
+| `Profiles` | ✅ public profiles; exposes `IProfilesApi` in `Profiles.Contracts` |
+| `Listings` | ✅ categories, search, create / update / withdraw listings |
+| `Projects`, `Chat`, `Notifications`, `Reviews`, `Payments`, `Admin`, `Gdpr` | empty skeletons for later phases |
 
-- Modul referencuje iné moduly **iba cez ich `.Contracts` projekt**, nikdy cez implementáciu. Tak nevzniknú cyklické závislosti (napr. Projects ↔ Listings) a hranicu stráži kompilátor.
-- `.Contracts` nereferencuje žiadny iný projekt.
-- Typy v implementácii sú `internal`. Verejná je iba registrácia modulu (`AddListingsModule()`, `MapListingsEndpoints()`), ktorú zavolá `Api` a `Worker`.
-- Každý modul má **vlastnú PostgreSQL schému** (`HasDefaultSchema("listings")`) a vlastnú históriu migrácií v `Infrastructure/Migrations/`.
-- Spoločný technický kód (DB, auth, chyby, udalosti) je v [`Common/`](../Common/README.md), nie v moduloch.
-- Moduly, ktoré pracujú s dátami všetkých ostatných (`Gdpr`, `Admin`), to robia cez rozhrania v `.Contracts`. Napríklad každý modul implementuje rozhranie na export a anonymizáciu osobných údajov a `Gdpr` ich iba zavolá.
+**Rules**
 
-**Vyhľadávanie** je v MVP súčasťou modulu `Listings`. Samostatný modul `Search` s vlastným read modelom vznikne až so sémantickým vyhľadávaním (pgvector).
+- A module references other modules **only through their `.Contracts` project**, never their implementation. This prevents circular dependencies (e.g. Projects ↔ Listings) and lets the compiler guard the boundary. Example: Listings shows the listing author by calling `IProfilesApi` from `Profiles.Contracts`.
+- A `.Contracts` project references no other project.
+- Implementation types are `internal`. The only public type is the module's registration class (`AddListingsModule()`, `MapListingsEndpoints()`), called by `Api`.
+- Each module has its **own PostgreSQL schema** (`HasDefaultSchema("listings")`) and its own migration history in `Infrastructure/Migrations/`.
+- Shared technical code (database, errors, current user) lives in [`Common/`](../Common/README.md), not in modules.
+- Modules that work with everyone's data (`Gdpr`, `Admin`) will do so through interfaces in `.Contracts` – e.g. each module implements export and anonymisation of its personal data and `Gdpr` only calls them.
 
-Podrobnosti sú v [hlavnom README](../../README.md#architektúra).
+These rules are checked automatically by the architecture tests in [`Tests/ArchitectureTests`](../Tests/ArchitectureTests).
+
+**Search** is part of `Listings` for the MVP. A separate `Search` module with its own read model is planned together with semantic search (pgvector).

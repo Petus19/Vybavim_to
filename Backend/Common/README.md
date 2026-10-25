@@ -1,13 +1,13 @@
 # Common
 
-Spoločný **technický** kód pre všetky moduly. Píše sa raz, aby sa v moduloch neduplikoval.
+Shared **technical** code used by all modules, written once so modules don't duplicate it. No business logic lives here.
 
-| Priečinok | Obsah |
+| Folder | Contents |
 |---|---|
-| `Database/` | `BaseDbContext`, pripojenie k DB, outbox |
-| `Auth/` | JWT, oprávnenia |
-| `Events/` | doménové udalosti, fronta |
-| `Errors/` | jednotné spracovanie chýb |
-| `Extensions/` | extension metódy (`AddPostgres`, `AddRedis`, …) |
+| `Database/` | `BaseDbContext` (schema per module, auto-discovered entity configurations, money as `numeric(12,2)`), `IModuleDbContext`, `DatabaseMigrator` (applies migrations on start-up in development), `IDevDataSeeder` (demo data, development only) |
+| `Errors/` | `Error` (code + message + kind), `Result<T>`, `DomainException`, mapping to RFC 9457 ProblemDetails (`ToProblem()`) |
+| `Auth/` | `ICurrentUser` (who is calling the API – modules use it without knowing anything about tokens), role names (`Roles.Admin`) |
+| `Extensions/` | registration helpers: `AddModuleDbContext<T>()`, `MigrateDatabasesAsync()`, `SeedDevDataAsync()`, `AddCurrentUser()` |
+| `Events/` | reserved for domain events and the transactional outbox (planned) |
 
-> ⚠️ Biznis logika sem **nepatrí**. Entity ako `User` alebo pravidlá pre inzeráty zostávajú vo svojom module. Ak modul potrebuje dáta iného modulu, získa ich cez jeho `.Contracts` projekt.
+> Business logic does **not** belong here. Entities such as `Listing` or `Profile` and their rules stay in their module. When a module needs another module's data, it uses that module's `.Contracts` project.

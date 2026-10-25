@@ -1,38 +1,45 @@
 # Tests
 
-| Projekt | Čo testuje | Potrebuje |
+95 automated tests in four projects:
+
+| Project | What it tests | Needs |
 |---|---|---|
-| `Modules.Listings.Tests` | pravidlá inzerátu (`Listing.Create`, zmeny stavu) – rýchle, bez databázy | nič |
-| `ArchitectureTests` | pravidlá štruktúry: moduly odkazujú na iné moduly iba cez `.Contracts`, `Common` a `.Contracts` nepoznajú moduly, vnútro modulu je `internal`, `Domain` nezávisí od databázy ani HTTP | nič |
-| `IntegrationTests` | celé Api cez HTTP proti skutočnému PostgreSQL (endpointy, filtre, chyby) | **bežiaci Docker** |
+| `Modules.Listings.Tests` | listing rules (`Listing.Create`, `Update`, state transitions) – fast, no database | nothing |
+| `Modules.Profiles.Tests` | profile rules (`Profile.Create`, `Update`, website validation) | nothing |
+| `ArchitectureTests` | structural rules: modules reference each other only through `.Contracts`, `Common` and `.Contracts` know no module, module internals stay `internal`, `Domain` does not depend on EF Core or HTTP | nothing |
+| `IntegrationTests` | the whole API over HTTP against a real PostgreSQL: search and filters, authentication and roles, creating/editing/withdrawing listings, profiles, error responses | **Docker running** |
 
-## Spustenie
+## Running
 
-V priečinku `Backend`:
+In the `Backend` folder:
 
 ```bash
 dotnet test
 ```
 
-Iba jeden projekt:
+A single project:
 
 ```bash
 dotnet test --project Tests/Modules.Listings.Tests
 ```
 
-Testy bežia na **Microsoft.Testing.Platform** (zapnuté v `Backend/global.json`) a používajú **xUnit v3**.
+The tests use **xUnit v3** on **Microsoft.Testing.Platform** (enabled in `Backend/global.json`).
 
-## Integračné testy
+## Integration tests
 
-`ApiFactory` spustí Api v pamäti testu a cez **Testcontainers** si naštartuje dočasný PostgreSQL v Dockeri (rovnaká verzia ako v `docker-compose.yml`). Api pri štarte aplikuje migrácie a vloží testovacie dáta, takže testy majú vždy rovnakých 12 inzerátov a 4 kategórie. Po testoch sa kontajner zmaže – vývojová databáza z `docker-compose` sa nemení.
+`ApiFactory` starts the API in memory (`WebApplicationFactory`) and uses **Testcontainers** to start a throw-away PostgreSQL in Docker (same version as `docker-compose.yml`). On start-up the API applies migrations and loads the demo data, so the tests always see the same 12 listings and 4 categories. The container is removed afterwards – the development database is never touched.
 
-## Ako pridať testy
+- The API is started once in `ApiFactory.InitializeAsync`, before any test runs. Test classes run in parallel; starting the API lazily from several of them at once would run migrations concurrently.
+- Tests that create listings use `WritableApiFactory` with **its own database**, so they cannot disturb the search tests that expect exactly 12 listings.
+- Every test that needs a user registers a fresh one with a unique email.
 
-- **pravidlo v doméne** → `Tests/Modules.<Modul>.Tests/Domain/` – projekt vidí `internal` typy modulu (`InternalsVisibleTo` v `Backend/Directory.Build.props`)
-- **nový endpoint** → `Tests/IntegrationTests/`
-- **nový modul** → testovací projekt `Tests/Modules.<Modul>.Tests` + pridať do `Vybavim.slnx`
-- názvy testov: `Metóda_Situácia_Výsledok`, napr. `Create_NegotiableWithAmount_Throws`
+## Adding tests
+
+- **a domain rule** → `Tests/Modules.<Module>.Tests/Domain/` – the project can see the module's `internal` types (`InternalsVisibleTo` in `Backend/Directory.Build.props`)
+- **a new endpoint** → `Tests/IntegrationTests/`
+- **a new module** → a test project `Tests/Modules.<Module>.Tests` + add it to `Vybavim.slnx`
+- test names: `Method_Scenario_ExpectedResult`, e.g. `Create_NegotiableWithAmount_Throws`
 
 ## CI
 
-`.github/workflows/ci.yml` spustí pri každom PR build a všetky testy backendu a lint, kontrolu typov a build webu.
+`.github/workflows/ci.yml` runs on every pull request: backend restore, Release build (warnings as errors) and all tests; web lint, type check and production build.

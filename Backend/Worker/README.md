@@ -1,5 +1,5 @@
-# Worker
+# Worker *(planned)*
 
-Spracovanie úloh z fronty: e-maily, notifikácie, obrázky, PDF faktúry, Stripe webhooky, cron úlohy a odosielanie udalostí z outboxu.
+A separate process for background jobs: emails, notifications, image processing, PDF invoices, Stripe webhooks, scheduled jobs and publishing events from the outbox.
 
-Referencuje rovnaké moduly a `Common/` ako `Api`, ale beží ako samostatný proces, ktorý sa škáluje nezávisle.
+It will reference the same modules and `Common/` as `Api`, but run as its own process that scales independently. Currently only an empty host – the job queue (Hangfire or Wolverine) is still to be chosen.
