@@ -1,7 +1,7 @@
-# Produkcia – doplní sa po rozhodnutí o hostingu
-# (VPS s Docker Compose alebo spravovaná cloudová služba).
+# Production – to be completed once hosting is decided
+# (a VPS with Docker Compose or a managed cloud service).
 #
-# Plánované služby: web, api, worker, db, redis, ai-service (neskôr). Súbory v S3 (lokálne RustFS).
-# Heslá a kľúče nikdy nezapisovať sem – načítajú sa z .env (mimo gitu).
+# Planned services: web, api, worker, db, redis, ai-service (later). Files in S3 (RustFS locally).
+# Never put passwords or keys here – they are loaded from .env (not committed).
 
 services: {}

@@ -1,5 +1,5 @@
-# Mobile *(neskôr, Fáza 3)*
+# Mobile *(planned – phase 3)*
 
-Mobilná aplikácia: **React Native / Expo** nad existujúcim API.
+Mobile app: **React Native / Expo** on top of the existing API.
 
-Rovnako ako web volá API cez typovaného klienta z [`Shared/`](../Shared/README.md).
+Like the web app, it will call the API through the typed client generated in [`Shared/`](../Shared/README.md).

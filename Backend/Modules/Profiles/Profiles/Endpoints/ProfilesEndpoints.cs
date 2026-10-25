@@ -13,21 +13,21 @@ internal static class ProfilesEndpoints
 {
     public static IEndpointRouteBuilder Map(IEndpointRouteBuilder app)
     {
-        var profiles = app.MapGroup("/api/v1/profiles").WithTags("Profily");
+        var profiles = app.MapGroup("/api/v1/profiles").WithTags("Profiles");
 
         profiles.MapGet("/me", GetMyProfileAsync)
             .WithName("GetMyProfile")
-            .WithSummary("Môj profil (404, kým ho nevyplním)")
+            .WithSummary("My profile (404 until it is created)")
             .RequireAuthorization();
 
         profiles.MapPut("/me", SaveMyProfileAsync)
             .WithName("SaveMyProfile")
-            .WithSummary("Uloženie môjho profilu – prvýkrát ho vytvorí, potom upraví")
+            .WithSummary("Create or update my profile")
             .RequireAuthorization();
 
         profiles.MapGet("/{userId:guid}", GetProfileAsync)
             .WithName("GetProfile")
-            .WithSummary("Verejný profil používateľa");
+            .WithSummary("Public user profile");
 
         return app;
     }

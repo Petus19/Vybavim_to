@@ -15,36 +15,36 @@ internal static class IdentityEndpoints
 {
     public static IEndpointRouteBuilder Map(IEndpointRouteBuilder app)
     {
-        var auth = app.MapGroup("/api/v1/auth").WithTags("Prihlásenie");
+        var auth = app.MapGroup("/api/v1/auth").WithTags("Authentication");
 
         auth.MapPost("/register", RegisterAsync)
             .WithName("Register")
-            .WithSummary("Registrácia nového používateľa (e-mail + heslo)");
+            .WithSummary("Register a new user (email + password)");
 
         auth.MapPost("/login", LoginAsync)
             .WithName("Login")
-            .WithSummary("Prihlásenie – vráti prístupový a refresh token")
+            .WithSummary("Sign in – returns an access token and a refresh token")
             .Produces<AccessTokenResponse>();
 
         auth.MapPost("/google", LoginWithGoogleAsync)
             .WithName("LoginWithGoogle")
-            .WithSummary("Prihlásenie cez Google – ID token od Google vymení za naše tokeny")
+            .WithSummary("Sign in with Google – exchanges a Google ID token for our tokens")
             .Produces<AccessTokenResponse>();
 
         auth.MapPost("/refresh", RefreshAsync)
             .WithName("RefreshToken")
-            .WithSummary("Nový prístupový token podľa refresh tokenu")
+            .WithSummary("Get a new access token using a refresh token")
             .Produces<AccessTokenResponse>();
 
         auth.MapGet("/me", GetMeAsync)
             .WithName("GetMe")
-            .WithSummary("Údaje o prihlásenom používateľovi")
+            .WithSummary("Current user")
             .RequireAuthorization();                       // iba prihlásení
 
-        app.MapGroup("/api/v1/users").WithTags("Správa používateľov")
+        app.MapGroup("/api/v1/users").WithTags("User management")
             .MapGet("/", GetUsersAsync)
             .WithName("GetUsers")
-            .WithSummary("Zoznam všetkých používateľov (iba admin)")
+            .WithSummary("List all users (admin only)")
             .RequireAuthorization(policy => policy.RequireRole(Roles.Admin));   // iba admini
 
         return app;

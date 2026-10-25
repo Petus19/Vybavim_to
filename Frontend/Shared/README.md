@@ -1,20 +1,20 @@
 # Shared
 
-TypeScript kód zdieľaný medzi `Web` a `Mobile`: typy API vygenerované z OpenAPI backendu.
+TypeScript code shared by `Web` and (later) `Mobile`: API types generated from the backend's OpenAPI document.
 
-Backend je v C#, preto sa typy s ním nezdieľajú ručne. Zdrojom pravdy je OpenAPI špecifikácia z `Backend/Api` (`http://localhost:5080/openapi/v1.json`).
+The backend is written in C#, so types are not shared by hand – the source of truth is the OpenAPI document produced by `Backend/Api` (`http://localhost:5080/openapi/v1.json`).
 
-| Súbor | Obsah |
+| File | Contents |
 |---|---|
-| `api/schema.d.ts` | typy všetkých endpointov a odpovedí API – **generovaný súbor, needitovať ručne** |
+| `api/schema.d.ts` | types of all API endpoints and responses – **generated, do not edit by hand** |
 
-## Pregenerovanie typov
+## Regenerating the types
 
-Keď sa v backende zmení API (nový endpoint, pole, enum), treba typy pregenerovať a commitnúť:
+When the API changes (new endpoint, field or enum value), regenerate the types and commit them:
 
 ```bash
-cd Backend && dotnet run --project Api      # API musí bežať (OpenAPI je iba vo vývoji)
-cd Frontend/Web && npm run api:types        # prepíše Frontend/Shared/api/schema.d.ts
+cd Backend && dotnet run --project Api      # the API must be running (OpenAPI is exposed in development)
+cd Frontend/Web && npm run api:types        # overwrites Frontend/Shared/api/schema.d.ts
 ```
 
-Potom `npm run typecheck` vo `Frontend/Web` ukáže každé miesto na webe, ktoré treba upraviť. Súbor je v gite, takže CI ani kolega na zostavenie webu nepotrebujú bežiace API.
+`npm run typecheck` in `Frontend/Web` then points at every place in the web app that needs updating. The file is committed, so CI and teammates can build the web app without a running API.

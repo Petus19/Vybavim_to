@@ -1,170 +1,168 @@
 # Web
 
-Frontend platformy: **Next.js 16** (React, TypeScript), Tailwind CSS 4 a komponenty [shadcn/ui](https://ui.shadcn.com).
+The platform's frontend: **Next.js 16** (React, TypeScript), Tailwind CSS 4 and [shadcn/ui](https://ui.shadcn.com) components. The UI is in Slovak (the target market).
 
-Biznis logika sem nepatrí. Web volá API cez typovaného klienta z [`Shared/`](../Shared/README.md).
+No business logic lives here – the web app calls the API through a typed client generated in [`Shared/`](../Shared/README.md).
 
-> **Stav:** web zobrazuje skutočné dáta z backendového API (`Backend/Api`). Kategórie a inzeráty sa načítavajú z `GET /api/v1/categories`, `/listings` a `/listings/{id}`.
+> **Status:** the web app shows real data from the backend API (`Backend/Api`): categories, search, listing detail, sign-in (email/password and Google), creating, editing and withdrawing listings, and "my listings".
 
-## Spustenie
+## Running
 
-Web potrebuje bežiace API. Verzia Node je v `.nvmrc` (Node 24), s `fnm` sa prepne automaticky.
+The web app needs the API running. The Node version is pinned in `.nvmrc` (Node 24).
 
 ```bash
-docker compose up -d                 # v koreni repozitára – databáza
-cd Backend && dotnet run --project Api   # API na http://localhost:5080
+docker compose up -d                       # in the repository root – database
+cd Backend && dotnet run --project Api     # API on http://localhost:5080
 cd Frontend/Web && npm install && npm run dev
 ```
 
-Web beží na http://localhost:3000. Ak API nebeží, stránka ukáže „Niečo sa nepodarilo“ s návodom (`src/app/error.tsx`).
+The web app runs on http://localhost:3000. If the API is not running, the page shows "Niečo sa nepodarilo" (*something went wrong*) with instructions (`src/app/error.tsx`).
 
-Adresa API sa dá zmeniť v `.env.local` (vzor `.env.example`): `API_URL=http://localhost:5080`.
+The API address can be changed in `.env.local` (template `.env.example`): `API_URL=http://localhost:5080`.
 
-| Príkaz              | Čo robí                                                      |
-| ------------------- | ------------------------------------------------------------ |
-| `npm run dev`       | vývojový server s hot reloadom                               |
-| `npm run build`     | produkčný build (odhalí aj chyby pri predgenerovaní stránok) |
-| `npm run lint`      | ESLint                                                       |
-| `npm run typecheck` | kontrola typov                                               |
-| `npm run format`    | naformátuje kód (Prettier + zoradenie Tailwind tried)        |
-| `npm run api:types` | pregeneruje typy API z OpenAPI (API musí bežať)              |
+| Command | What it does |
+| --- | --- |
+| `npm run dev` | development server with hot reload |
+| `npm run build` | production build (also catches errors in pre-rendered pages) |
+| `npm run lint` | ESLint |
+| `npm run typecheck` | generates Next.js route types and runs the TypeScript check |
+| `npm run format` | formats the code (Prettier + Tailwind class sorting) |
+| `npm run api:types` | regenerates the API types from OpenAPI (the API must be running) |
 
-## Napojenie na API
+## Talking to the API
 
-- **`src/lib/api.ts`** – jediné miesto, kde web volá API. Klient [`openapi-fetch`](https://openapi-ts.dev/openapi-fetch/) s typmi z `Frontend/Shared/api/schema.d.ts`, takže TypeScript skontroluje adresy, parametre aj odpovede.
-- **Volá sa iba zo servera** (Server Components), preto nie je potrebný CORS a adresa API (`API_URL`) nie je v prehliadači.
-- **Dáta sa načítavajú pri požiadavke**, nie pri `next build` (`connection()` v `api.ts`). Build aj CI preto nepotrebujú bežiace API. Komponenty, ktoré volajú API, musia byť v `<Suspense>`.
-- **Chyby:** neplatný filter (400) ukáže správu v zozname, neexistujúci inzerát (404) stránku „nenašli sme“, nedostupné API chybovú stránku s tlačidlom _Skúsiť znova_.
-- Po zmene API v backende: `npm run api:types` a commitnúť `Frontend/Shared/api/schema.d.ts`.
+- **`src/lib/api.ts`** is the only place that calls the API – an [`openapi-fetch`](https://openapi-ts.dev/openapi-fetch/) client typed by `Frontend/Shared/api/schema.d.ts`, so TypeScript checks URLs, parameters and responses.
+- **Only the server calls the API** (Server Components and Server Actions), so no CORS is needed and the API address (`API_URL`) never reaches the browser.
+- **Data is fetched per request**, not at `next build` time (`connection()` in `api.ts`), so the build and CI don't need a running API. Components that call the API must be inside `<Suspense>`.
+- **Errors:** an invalid filter (400) shows a message in the list, a missing listing (404) shows the "not found" page, an unreachable API shows an error page with a *Try again* button.
+- After an API change in the backend: run `npm run api:types` and commit `Frontend/Shared/api/schema.d.ts`.
 
-## Stránky
+## Pages
 
-| URL                      | Súbor                            | Obsah                                                                          |
-| ------------------------ | -------------------------------- | ------------------------------------------------------------------------------ |
-| `/`                      | `src/app/page.tsx`               | úvod: vyhľadávanie, kategórie, najnovšie inzeráty, ako to funguje              |
-| `/inzeraty`              | `src/app/inzeraty/page.tsx`      | zoznam s vyhľadávaním, kategóriami, panelom „Filtre“ a zoradením               |
-| `/inzeraty/[id]`         | `src/app/inzeraty/[id]/page.tsx` | detail: fakty v dlaždiciach, výsledky, zručnosti, požiadavky, podobné inzeráty |
-| `/prihlasenie`           | `src/app/prihlasenie/page.tsx`   | prihlásenie a registrácia (záložky, `?rezim=registracia`, `?navrat=`)          |
-| `/inzeraty/[id]/ponuka`  | `src/app/inzeraty/[id]/ponuka/`  | poslanie ponuky – **iba prihlásený**, zatiaľ „pripravujeme“                    |
-| `/pridat-inzerat`        | `src/app/pridat-inzerat/`        | pridanie inzerátu v 3 krokoch – **iba prihlásený**                             |
-| `/inzeraty/[id]/upravit` | `src/app/inzeraty/[id]/upravit/` | úprava inzerátu – **iba autor** a iba otvorený inzerát                         |
-| `/moje-inzeraty`         | `src/app/moje-inzeraty/`         | moje inzeráty vo všetkých stavoch, stiahnutie – **iba prihlásený**             |
+| URL | File | Contents |
+| --- | --- | --- |
+| `/` | `src/app/page.tsx` | home: search, categories, latest listings, how it works |
+| `/inzeraty` | `src/app/inzeraty/page.tsx` | listings with search, categories, a "Filters" panel and sorting |
+| `/inzeraty/[id]` | `src/app/inzeraty/[id]/page.tsx` | detail: facts as tiles, deliverables, skills, requirements, similar listings |
+| `/prihlasenie` | `src/app/prihlasenie/page.tsx` | sign in and register (tabs, `?rezim=registracia`, `?navrat=` return path) |
+| `/inzeraty/[id]/ponuka` | `src/app/inzeraty/[id]/ponuka/` | send an offer – **signed in only**, placeholder until the offers API exists |
+| `/pridat-inzerat` | `src/app/pridat-inzerat/` | create a listing in 3 steps – **signed in only** |
+| `/inzeraty/[id]/upravit` | `src/app/inzeraty/[id]/upravit/` | edit a listing – **author only**, open listings only |
+| `/moje-inzeraty` | `src/app/moje-inzeraty/` | my listings in all statuses, withdraw – **signed in only** |
 
-### Pridanie a úprava inzerátu
+### Creating and editing a listing
 
-Jeden formulár pre oboje (`src/components/listing-form.tsx`) v troch krokoch: **čo potrebuješ** (kategória, názov, popis, zručnosti, výsledky, požiadavky) → **rozpočet a termín** (cena, úroveň, rozsah, spolupráca, termín) → **kde** (na diaľku / mesto, faktúra, náhľad karty).
+One form for both (`src/components/listing-form.tsx`) in three steps: **what you need** (category, title, description, skills, deliverables, requirements) → **budget and deadline** (price, level, scope, engagement, deadline) → **where** (remote / city, invoice, card preview).
 
-- **Pravidlá** sú v `src/lib/listing-form.ts` a zhodujú sa s backendom (`Listing.Normalize`): názov max. 120 znakov, popis max. 5000, 1–10 zručností, suma > 0 okrem ceny dohodou, mesto povinné, ak práca nie je na diaľku, termín nie v minulosti. Chyby sa ukážu po kliknutí na „Pokračovať“ a kurzor skočí na prvé chybné pole.
-- **Uloženie:** Server Action `saveListing` (`src/app/pridat-inzerat/actions.ts`) overí pravidlá ešte raz a zavolá `POST /api/v1/listings` alebo `PUT /api/v1/listings/{id}`. Chybu z API s kódom (napr. `listing.title_too_long`) zobrazí pri príslušnom poli (`fieldByErrorCode`), ostatné nad tlačidlom. Po uložení presmeruje na detail inzerátu.
-- **Úprava** je pre autora („Upraviť“ v Moje inzeráty a na detaile). Cudzí inzerát vráti „nenašli sme“ a neotvorený (prebieha, stiahnutý) iba vysvetlenie.
+- **Validation** in `src/lib/listing-form.ts` mirrors the backend (`Listing.Normalize`): title max 120 characters, description max 5000, 1–10 skills, amount > 0 unless negotiable, city required unless remote, deadline not in the past. Errors appear after "Continue" and focus jumps to the first invalid field.
+- **Saving:** the Server Action `saveListing` (`src/app/pridat-inzerat/actions.ts`) validates again and calls `POST /api/v1/listings` or `PUT /api/v1/listings/{id}`. An API error with a code (e.g. `listing.title_too_long`) is shown next to the matching field (`fieldByErrorCode`), anything else above the button. After saving it redirects to the listing detail.
+- **Editing** is available to the author ("Edit" in My listings and on the detail). Someone else's listing shows "not found", a listing that is no longer open shows an explanation.
 
-### Moje inzeráty
+### My listings
 
-- Zoznam z `GET /api/v1/listings/mine` (všetky stavy, najnovšie prvé, 20 na stranu, `?strana=`). Odkaz je v menu účtu v hlavičke.
-- **Stiahnuť** sa dá iba otvorený inzerát – tlačidlo sa najprv opýta priamo v riadku (`src/components/cancel-listing-button.tsx`), potom Server Action `cancelListing` (`src/app/moje-inzeraty/actions.ts`) zavolá `POST /api/v1/listings/{id}/cancel` a `refresh()` načíta stránku nanovo. Ak sa stav medzitým zmenil (409), ukáže sa aktuálny stav.
-- Stiahnutý inzerát vo vyhľadávaní nie je a cudzí ho nevidia (404). **Autor** ho na detaile vidí, lebo web posiela API aj jeho token (`getListing(id, token)`), a namiesto „Poslať ponuku“ má „Toto je tvoj inzerát“.
+- The list comes from `GET /api/v1/listings/mine` (all statuses, newest first, 20 per page, `?strana=`). The link is in the account menu in the header.
+- Only an open listing can be **withdrawn** – the button asks for confirmation inline (`src/components/cancel-listing-button.tsx`), then the Server Action `cancelListing` (`src/app/moje-inzeraty/actions.ts`) calls `POST /api/v1/listings/{id}/cancel` and refreshes the page. If the status changed in the meantime (409), the current status is shown.
+- A withdrawn listing is not in search results and others can't see it (404). The **author** still sees it on the detail page because the web app sends their token too (`getListing(id, token)`), and gets "This is your listing" instead of "Send an offer".
 
-### Filtre inzerátov (parametre v URL)
+### Listing filters (URL parameters)
 
-Filtre sú v URL, takže sa výsledok dá zdieľať odkazom. Prázdne polia sa do URL nepridávajú (`src/components/search-form.tsx`). Web ich prekladá na parametre API (`toApiQuery()` v `src/app/inzeraty/page.tsx`, prehľad je v `Backend/Api/README.md`).
+Filters live in the URL, so a result can be shared as a link. Empty fields are left out of the URL (`src/components/search-form.tsx`). The web app maps its Slovak parameter names to the API parameters (`toApiQuery()` in `src/app/inzeraty/page.tsx`; see `Backend/Api/README.md`).
 
-| Parameter                | Hodnoty                            | Význam                                                   |
-| ------------------------ | ---------------------------------- | -------------------------------------------------------- |
-| `q`                      | text                               | hľadanie v názve, popise a zručnostiach (bez diakritiky) |
-| `kategoria`              | `web`, `grafika`, `it-podpora`, …  | kategória                                                |
-| `typ`                    | `pevna`, `hodinova`, `dohodou`     | typ ceny                                                 |
-| `cena_od`, `cena_do`     | číslo (€)                          | rozsah **pevnej ceny**                                   |
-| `sadzba_od`, `sadzba_do` | číslo (€/hod.)                     | rozsah **hodinovej sadzby**                              |
-| `mesto`                  | názov mesta                        | lokalita                                                 |
-| `uroven`                 | `zaciatocnik`, `skuseny`, `expert` | očakávaná úroveň odborníka                               |
-| `spolupraca`             | `jednorazovo`, `dlhodobo`          | typ spolupráce                                           |
-| `na_dialku`, `otvorene`  | `1`                                | iba práca na diaľku / iba otvorené inzeráty              |
-| `bez_faktury`            | `1`                                | iba inzeráty, ktoré nevyžadujú faktúru                   |
-| `zoradit`                | `najlacnejsie`, `najdrahsie`       | zoradenie (predvolené: najnovšie)                        |
-| `strana`                 | číslo                              | stránkovanie (24 inzerátov na stranu)                    |
+| Parameter | Values | Meaning |
+| --- | --- | --- |
+| `q` | text | search in title, description and skills (ignores diacritics) |
+| `kategoria` | `web`, `grafika`, `it-podpora`, … | category |
+| `typ` | `pevna`, `hodinova`, `dohodou` | price type: fixed, hourly, negotiable |
+| `cena_od`, `cena_do` | number (€) | **fixed price** range |
+| `sadzba_od`, `sadzba_do` | number (€/hour) | **hourly rate** range |
+| `mesto` | city name | location |
+| `uroven` | `zaciatocnik`, `skuseny`, `expert` | expected experience level |
+| `spolupraca` | `jednorazovo`, `dlhodobo` | one-off or ongoing |
+| `na_dialku`, `otvorene` | `1` | remote only / open listings only |
+| `bez_faktury` | `1` | listings that don't require an invoice |
+| `zoradit` | `najlacnejsie`, `najdrahsie` | sort (default: newest) |
+| `strana` | number | page (24 listings per page) |
 
-Pevná cena a hodinová sadzba sa **nikdy navzájom neporovnávajú** – rozsahy aj zoradenie podľa ceny rieši backend (`SearchListings`).
+Fixed prices and hourly rates are **never compared with each other** – ranges and price sorting are handled by the backend (`SearchListings`).
 
-### Čo z API ešte chýba
+### Not yet in the web app
 
-- **Zadávateľ** (meno, hodnotenie, overenie, počet projektov) – API vracia iba `ownerId`. Karta zadávateľa na detaile je preto zatiaľ skrytá, pribudne s modulmi Identity, Profiles a Reviews.
-- **Počet ponúk** na inzerát – pribudne s odpoveďami na inzeráty (modul Projects).
-- **Zoznam miest** pre filter – je zatiaľ napevno v `src/lib/listings.ts`.
-- Prílohy, otázky pre uchádzačov a polia podľa kategórie (JSONB) – ďalšia verzia.
+- **Listing author card** – the API now returns `owner` (from the Profiles module) on the listing detail; the card and a "my profile" page are the next web step.
+- **Number of offers** per listing – comes with the offers API.
+- **City list** for the filter – hard-coded in `src/lib/listings.ts` for now.
 
-## Prihlásenie
+## Authentication
 
-Prezerať inzeráty môže každý. Prihlásenie sa vyžaduje až **pri akcii** (poslať ponuku, pridať inzerát, neskôr chat a obľúbené) a po ňom sa človek **vráti presne tam, kam smeroval** (`?navrat=`).
+Anyone can browse listings. Sign-in is required only **for an action** (send an offer, post a listing), and afterwards the user **returns exactly where they were going** (`?navrat=`).
 
-| Súbor                             | Čo robí                                                                                                                                                                                          |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `src/lib/auth.ts`                 | `getCurrentUser()` (kto je prihlásený, cez `GET /api/v1/auth/me`), `requireUser(navrat)` pre chránené stránky, `requireSession(navrat)` – navyše token na chránené endpointy, `safeReturnPath()` |
-| `src/app/prihlasenie/actions.ts`  | Server Actions `login`, `register` (po registrácii rovno prihlási), `logout`                                                                                                                     |
-| `src/components/auth-form.tsx`    | formulár s chybami z API a priebežnou kontrolou pravidiel hesla                                                                                                                                  |
-| `src/components/account-menu.tsx` | v hlavičke „Prihlásiť“ alebo avatar s menu a odhlásením                                                                                                                                          |
-| `src/proxy.ts`                    | keď vyprší access token (1 h), vypýta si od API nový pomocou refresh tokenu (14 dní)                                                                                                             |
-| `src/lib/auth-cookies.ts`         | názvy a nastavenia cookies                                                                                                                                                                       |
+| File | What it does |
+| --- | --- |
+| `src/lib/auth.ts` | `getCurrentUser()` (via `GET /api/v1/auth/me`), `requireUser(returnPath)` for protected pages, `requireSession(returnPath)` – also returns the token for protected endpoints, `safeReturnPath()` |
+| `src/app/prihlasenie/actions.ts` | Server Actions `login`, `register` (signs in right after registration), `logout` |
+| `src/components/auth-form.tsx` | form with API errors and live password-rule hints |
+| `src/components/account-menu.tsx` | "Sign in" or an avatar with a menu and sign-out in the header |
+| `src/proxy.ts` | when the access token (1 h) expires, gets new tokens from the API using the refresh token (14 days) |
+| `src/lib/auth-cookies.ts` | cookie names and options |
 
-**Tokeny** sú v cookies `vybavim_access` a `vybavim_refresh` s príznakom **httpOnly** – JavaScript v prehliadači sa k nim nedostane, API volá iba server webu. V produkcii majú aj `secure` (iba HTTPS).
+**Tokens** are stored in the `vybavim_access` and `vybavim_refresh` cookies with the **httpOnly** flag – browser JavaScript can't read them; only the web server calls the API. In production they are also `secure` (HTTPS only).
 
-**Nová chránená stránka:** komponent v `<Suspense>` zavolá `await requireUser("/adresa-stranky")` – neprihláseného presmeruje na prihlásenie a po ňom ho vráti späť. Vzor je v `src/app/pridat-inzerat/page.tsx`. Ak stránka volá chránený endpoint API, použi `requireSession` a token pošli cez `authHeaders(token)` (vzor `src/app/moje-inzeraty/page.tsx`).
+**Adding a protected page:** a component inside `<Suspense>` calls `await requireUser("/page-path")` – an anonymous user is redirected to sign-in and brought back afterwards (see `src/app/pridat-inzerat/page.tsx`). If the page calls a protected API endpoint, use `requireSession` and pass the token via `authHeaders(token)` (see `src/app/moje-inzeraty/page.tsx`).
 
-**Bezpečnosť:** `navrat` smie byť iba adresa tohto webu (`/…`), cudzie adresy (`//evil.com`, `https://…`) sa ignorujú – odkaz na prihlásenie sa tak nedá zneužiť na presmerovanie na podvodnú stránku.
+**Security:** the return path may only be a path on this site (`/…`); external addresses (`//evil.com`, `https://…`) are ignored, so the sign-in link can't be abused as an open redirect.
 
-**Testovací účet:** vo vývoji API vytvorí admina `admin@vybavim.local` (heslo v `Backend/Api/README.md`). Vlastný účet si vytvoríš na `/prihlasenie?rezim=registracia`.
+**Development account:** in development the API seeds an admin `admin@vybavim.local` (password in `Backend/Api/README.md`). You can register your own account at `/prihlasenie?rezim=registracia`.
 
-### Prihlásenie cez Google
+### Sign in with Google
 
-Tlačidlo **„Pokračovať s Google“** funguje pre prihlásenie aj registráciu (OAuth 2.0 s PKCE):
+The **"Pokračovať s Google"** (*Continue with Google*) button works for both sign-in and registration (OAuth 2.0 with PKCE):
 
-1. `src/app/prihlasenie/google/route.ts` – presmeruje na Google; do krátkodobej httpOnly cookie uloží náhodný `state`, PKCE verifier a `navrat`
-2. `src/app/prihlasenie/google/callback/route.ts` – overí `state`, vymení kód za ID token (s Client secret), pošle ho do API (`POST /api/v1/auth/google`), uloží naše tokeny a vráti používateľa na `navrat`
+1. `src/app/prihlasenie/google/route.ts` – redirects to Google; stores a random `state`, the PKCE verifier and the return path in a short-lived httpOnly cookie
+2. `src/app/prihlasenie/google/callback/route.ts` – verifies `state`, exchanges the code for an ID token (using the client secret), sends it to the API (`POST /api/v1/auth/google`), stores our tokens and returns the user to the return path
 
-Tlačidlo sa zobrazí iba vtedy, keď sú v **`.env.local`** vyplnené `GOOGLE_CLIENT_ID` a `GOOGLE_CLIENT_SECRET` (vzor `.env.example`). **Client secret nikdy nedávaj do gitu** – kolegom ho pošli bezpečne (napr. cez správcu hesiel), nie cez chat alebo e-mail.
+The button is shown only when **`.env.local`** contains `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` (template `.env.example`). **Never commit the client secret** – share it with teammates through a password manager, not chat or email.
 
-Nastavenie v [Google Cloud Console](https://console.cloud.google.com) (projekt _Vybavim-to_ → Google Auth Platform):
+Google Cloud Console setup (project _Vybavim-to_ → Google Auth Platform):
 
-- **Clients** → Web application, _Authorized redirect URI_ `http://localhost:3000/prihlasenie/google/callback` (pre produkciu pribudne adresa produkčnej domény)
-- **Audience** → kým je aplikácia v režime _Testing_, prihlásiť sa môžu iba ľudia v zozname **Test users** – nového kolegu treba pridať tam
+- **Clients** → Web application, _Authorized redirect URI_ `http://localhost:3000/prihlasenie/google/callback` (the production domain will be added later)
+- **Audience** → while the app is in _Testing_ mode, only accounts listed under **Test users** can sign in
 
-Prepojenie s existujúcim účtom a vytváranie nových účtov rieši API – pozri `Backend/Api/README.md`, časť „Prihlásenie cez Google“.
+Linking to an existing account and creating new accounts is handled by the API – see `Backend/Api/README.md`, "Sign in with Google".
 
-### Čo z prihlásenia ešte chýba (backend)
+### Not yet implemented (backend)
 
-- **Odhlásenie na serveri** – web pri odhlásení zmaže cookies, ale refresh token v API zostáva platný až 14 dní (API nemá endpoint na jeho zneplatnenie).
-- **Zabudnuté heslo, overenie e-mailu, Apple** – tlačidlá pribudnú, keď ich bude vedieť API.
-- **Meno a rola** (zadávateľ / odborník) – patria do modulu Profiles, registrácia má zatiaľ iba e-mail a heslo.
+- **Server-side sign-out** – signing out deletes the cookies, but the refresh token stays valid in the API for up to 14 days (no revocation endpoint yet).
+- **Password reset, email verification, Apple sign-in** – will appear once the API supports them.
 
-## Dizajn
+## Design
 
-Riadime sa princípmi [Apple Human Interface Guidelines](https://developer.apple.com/design/human-interface-guidelines) (nie značkou Apple):
+We follow the principles of Apple's [Human Interface Guidelines](https://developer.apple.com/design/human-interface-guidelines) (not the Apple brand):
 
-- **Jedna akcentová farba:** zelená značky (`--brand`, `--primary`) na tlačidlá a odkazy. Oranžová (`--brand-orange`) je iba v logu.
-- **Neutrálne plochy:** biele pozadie, sekcie a karty odlíšené sivou plochou `bg-surface` (`#f5f5f7`), bez rámčekov a tieňov.
-- **Veľa priestoru, menej informácií:** karta inzerátu ukazuje iba kategóriu, názov, mesto a rozpočet, ostatné je až v detaile.
-- **Výrazné nadpisy:** `font-semibold tracking-tight`, veľké veľkosti (`text-5xl` až `text-7xl` na úvode).
-- **Tlačidlá a polia v tvare piluliek** (`rounded-full`), karty `rounded-3xl`.
-- **Textové odkazy so šípkou** (`<ChevronLink>`): „Všetky inzeráty ›“.
-- **Písmo** Inter s podmnožinou `latin-ext` (slovenská diakritika), najbližší voľný ekvivalent písma SF Pro.
+- **One accent colour:** the brand green (`--brand`, `--primary`) for buttons and links. Orange (`--brand-orange`) only in the logo.
+- **Neutral surfaces:** white background, sections and cards separated by a grey surface `bg-surface` (`#f5f5f7`), no borders or shadows.
+- **Lots of space, less information:** a listing card shows only category, title, city and budget; everything else is on the detail page.
+- **Bold headings:** `font-semibold tracking-tight`, large sizes (`text-5xl` to `text-7xl` on the home page).
+- **Pill-shaped buttons and inputs** (`rounded-full`), cards `rounded-3xl`.
+- **Text links with a chevron** (`<ChevronLink>`).
+- **Font:** Inter with the `latin-ext` subset (Slovak diacritics), the closest free equivalent of SF Pro.
 
-Ďalej:
+Also:
 
-- **Logo** (`src/components/logo.tsx`): oranžová bodka = zadávateľ, zelená = odborník, čiara = fajka „vybavené“. Favicon je `src/app/icon.svg`.
-- **Farby** sú design tokeny v `src/app/globals.css` pre svetlý aj tmavý režim. Pri zmene dizajnu sa menia len tam.
-- Texty s počtom používajú `plural()` z `src/lib/listings.ts` (1 inzerát, 2 inzeráty, 5 inzerátov).
+- **Logo** (`src/components/logo.tsx`): orange dot = client, green dot = specialist, line = a "done" tick. Favicon: `src/app/icon.svg`.
+- **Colours** are design tokens in `src/app/globals.css` for light and dark mode – a design change happens only there.
+- Texts with counts use `plural()` from `src/lib/listings.ts` (Slovak plural forms).
 
-## Svetlý a tmavý režim
+## Light and dark mode
 
-- V hlavičke je ikona ☀︎/☾ na rýchle prepnutie, v päte voľba **Automaticky / Svetlý / Tmavý** (`src/components/theme-toggle.tsx`).
-- Voľba sa ukladá v `localStorage` (`theme`). „Automaticky“ ju zmaže a režim sa riadi systémom.
-- Na `<html>` sa nastaví `data-theme="light" | "dark"`. Skript v `<head>` (`src/lib/theme.ts`) ho nastaví ešte pred vykreslením, aby stránka pri načítaní nezablikala.
-- Tmavé farby sú v `globals.css` pod `:root[data-theme="dark"]`. Tailwind trieda `dark:` sa riadi tým istým atribútom.
+- A ☀︎/☾ icon in the header toggles quickly; the footer offers **Auto / Light / Dark** (`src/components/theme-toggle.tsx`).
+- The choice is stored in `localStorage` (`theme`); "Auto" removes it and follows the system.
+- `<html>` gets `data-theme="light" | "dark"`. A script in `<head>` (`src/lib/theme.ts`) sets it before the first paint, so the page doesn't flash.
+- Dark colours are in `globals.css` under `:root[data-theme="dark"]`; Tailwind's `dark:` variant follows the same attribute.
 
-## Next.js 16: na čo si dať pozor
+## Next.js 16 notes
 
-Táto verzia má zapnuté **Cache Components** (`next.config.ts`). `params` a `searchParams` sú `Promise` a komponent, ktorý ich číta (alebo volá API), musí byť v `<Suspense>`. Inak dev server hlási, že navigácia nebude okamžitá. Vzor nájdeš v `src/app/inzeraty/page.tsx`. Aktuálna dokumentácia je v `node_modules/next/dist/docs/`.
+This version has **Cache Components** enabled (`next.config.ts`). `params` and `searchParams` are `Promise`s, and a component that reads them (or calls the API) must be inside `<Suspense>`, otherwise the dev server warns that navigation won't be instant. See `src/app/inzeraty/page.tsx`. Up-to-date docs are in `node_modules/next/dist/docs/`.
 
-Ak sa zmena v `src/app/globals.css` neprejaví (napr. nové farby), dev server ju nezachytil. Zastav ho, zmaž cache a spusti znova:
+If a change in `src/app/globals.css` (e.g. new colours) doesn't show up, stop the dev server, clear the cache and start again:
 
 ```bash
 rm -rf .next && npm run dev
