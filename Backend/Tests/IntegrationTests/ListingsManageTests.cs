@@ -121,6 +121,23 @@ public sealed class ListingsManageTests(WritableApiFactory factory) : IClassFixt
     }
 
     [Fact]
+    public async Task Create_WithoutProfile_OwnerIsNull_WithProfile_OwnerIsFilled()
+    {
+        var token = await NewUserTokenAsync();
+
+        // Bez profilu: inzerát má ownerId, ale karta autora je prázdna
+        var withoutProfile = await JsonAsync(await SendAsync(HttpMethod.Post, "/api/v1/listings", token, ValidListing()));
+        Assert.Equal(JsonValueKind.Null, withoutProfile.GetProperty("owner").ValueKind);
+
+        // Po vyplnení profilu sa autor zobrazí (Listings → Profiles cez IProfilesApi)
+        await SendAsync(HttpMethod.Put, "/api/v1/profiles/me", token,
+            new { type = "company", displayName = "Pekáreň U Nás", city = "Nitra", bio = (string?)null, skills = (string[]?)null, website = (string?)null });
+        var withProfile = await JsonAsync(await SendAsync(HttpMethod.Get, $"/api/v1/listings/{withoutProfile.GetProperty("id").GetString()}", token));
+
+        Assert.Equal("Pekáreň U Nás", withProfile.GetProperty("owner").GetProperty("displayName").GetString());
+    }
+
+    [Fact]
     public async Task Create_NegotiableWithAmount_Returns400WithCode()
     {
         var token = await NewUserTokenAsync();

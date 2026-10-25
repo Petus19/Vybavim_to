@@ -1,4 +1,5 @@
 using Vybavim.Modules.Listings.Domain;
+using Vybavim.Modules.Profiles.Contracts;
 
 namespace Vybavim.Modules.Listings.Application;
 
@@ -46,7 +47,14 @@ internal sealed record ListingDetailResponse(
     IReadOnlyList<string> Skills,
     IReadOnlyList<string> Deliverables,
     IReadOnlyList<string> Requirements,
-    Guid OwnerId);
+    Guid OwnerId,
+    ListingOwnerResponse? Owner);
+
+/// <summary>
+/// Autor inzerátu pre kartu zadávateľa – údaje z modulu Profiles.
+/// Null, ak autor ešte nemá vyplnený profil.
+/// </summary>
+internal sealed record ListingOwnerResponse(Guid Id, string DisplayName, ProfileType Type, string? City);
 
 /// <summary>Jedna stránka výsledkov + celkový počet (pre „12 inzerátov“ a stránkovanie).</summary>
 internal sealed record PagedResponse<T>(IReadOnlyList<T> Items, int Total, int Page, int PageSize);

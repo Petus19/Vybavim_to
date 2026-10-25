@@ -7,5 +7,7 @@
   <ItemGroup>
     <ProjectReference Include="../../../Common/Vybavim.Common.csproj" />
     <ProjectReference Include="../Listings.Contracts/Vybavim.Modules.Listings.Contracts.csproj" />
+    <!-- Iný modul IBA cez jeho kontrakt: údaje o autorovi inzerátu z modulu Profiles -->
+    <ProjectReference Include="../../Profiles/Profiles.Contracts/Vybavim.Modules.Profiles.Contracts.csproj" />
   </ItemGroup>
 </Project>

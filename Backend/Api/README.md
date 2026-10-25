@@ -73,6 +73,32 @@ Vytvára ho `IdentityDevSeeder` iba v prostredí Development – **na produkčno
 
 **V Scalar:** zavolaj `POST /api/v1/auth/login`, skopíruj `accessToken`, hore klikni na **Authentication** (Bearer) a vlož ho. Potom fungujú aj chránené endpointy.
 
+## Profily
+
+Verejný profil používateľa (modul `Profiles`, schéma `profiles`). Každý používateľ má najviac jeden profil; kým ho nevyplní, `GET /profiles/me` vráti 404.
+
+| Metóda | Adresa | Kto | Popis |
+|---|---|---|---|
+| GET | `/api/v1/profiles/me` | prihlásený | môj profil, 404 `profile.not_found` kým ho nevyplním |
+| PUT | `/api/v1/profiles/me` | prihlásený | uloží môj profil – prvýkrát ho vytvorí, potom upraví |
+| GET | `/api/v1/profiles/{userId}` | ktokoľvek | verejný profil |
+
+```json
+{
+  "type": "person",
+  "displayName": "Jana Kováčová",
+  "city": "Košice",
+  "bio": "Grafička s 5-ročnou praxou.",
+  "skills": ["Branding", "Illustrator"],
+  "website": "https://jana-grafika.sk"
+}
+```
+
+- `type`: `person` alebo `company`; povinné sú `type` a `displayName`, ostatné nepovinné
+- pravidlá: meno max. 100 znakov, mesto 100, popis 2000, max. 20 zručností po 50 znakov, web iba celá adresa `http(s)://`
+- chyby: `profile.display_name_required`, `profile.display_name_too_long`, `profile.city_too_long`, `profile.bio_too_long`, `profile.too_many_skills`, `profile.skill_too_long`, `profile.invalid_website` (400), `profile.not_found` (404)
+- vo vývoji majú profily všetci zadávatelia testovacích inzerátov (`ProfilesDevSeeder`)
+
 ## Endpointy inzerátov
 
 | Metóda | Adresa | Popis |
@@ -139,7 +165,7 @@ Odpoveď: `{ "items": [...], "total": 12, "page": 1, "pageSize": 20 }`.
 
 - Enumy sú text v tvare snake_case: `"in_progress"`, `"one_time"`, `"negotiable"`.
 - Rozpočet: `{ "type": "fixed", "amount": 300.00 }`, pri cene dohodou `{ "type": "negotiable", "amount": null }`.
-- Údaje o zadávateľovi zatiaľ nie sú, inzerát má iba `ownerId`. Meno, hodnotenie a ďalšie prídu s modulmi Identity, Profiles a Reviews.
+- Detail inzerátu má autora z modulu Profiles: `"owner": { "id", "displayName", "type", "city" }`. Ak autor ešte nemá profil, je `owner: null` (`ownerId` je vždy). Hodnotenie a počet projektov prídu s modulmi Reviews a Projects.
 
 ### Chyby
 
