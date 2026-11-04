@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Vybavim.Common.Database;
 using Vybavim.Common.Extensions;
 using Vybavim.Modules.Listings.Application;
+using Vybavim.Modules.Listings.Contracts;
 using Vybavim.Modules.Listings.Endpoints;
 using Vybavim.Modules.Listings.Infrastructure;
 using Vybavim.Modules.Listings.Infrastructure.Seeding;
@@ -31,6 +32,9 @@ public static class ListingsModule
         services.AddScoped<UpdateListing>();
         services.AddScoped<CancelListing>();
         services.AddScoped<GetMyListings>();
+
+        // Kontrakt pre ostatné moduly: kto si vypýta IListingsApi, dostane našu internal implementáciu
+        services.AddScoped<IListingsApi, ListingsApi>();
 
         // Testovacie inzeráty – spustí ich Api iba vo vývoji (SeedDevDataAsync).
         services.AddScoped<IDevDataSeeder, ListingsDevSeeder>();

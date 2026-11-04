@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Unit testy modulu Projects: doména ponuky a jej pravidlá, bez databázy.
+       Vidí aj internal typy modulu (InternalsVisibleTo v Backend/Directory.Build.props). -->
+  <ItemGroup>
+    <ProjectReference Include="../../Modules/Projects/Projects/Vybavim.Modules.Projects.csproj" />
+  </ItemGroup>
+</Project>

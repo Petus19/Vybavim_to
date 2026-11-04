@@ -8,10 +8,12 @@ It contains no business logic – it only wires up shared infrastructure and the
 builder.Services.AddIdentityModule(builder.Configuration);  // Modules/Identity
 builder.Services.AddProfilesModule(builder.Configuration);  // Modules/Profiles
 builder.Services.AddListingsModule(builder.Configuration);  // Modules/Listings
+builder.Services.AddProjectsModule(builder.Configuration);  // Modules/Projects (offers)
 
 app.MapIdentityEndpoints();
 app.MapProfilesEndpoints();
 app.MapListingsEndpoints();
+app.MapProjectsEndpoints();
 ```
 
 ## Running
@@ -187,6 +189,30 @@ Errors are RFC 9457 ProblemDetails with a `code` field for the client. The human
 | 403 | someone else's listing | `listing.not_owner`, `listing.cancel_not_allowed` |
 | 404 | listing does not exist | `listing.not_found` |
 | 409 | listing is no longer open (update, withdraw) | `listing.not_editable`, `listing.invalid_status_change` |
+
+## Offers
+
+Specialists respond to listings with offers (module `Projects`, schema `projects`). All endpoints require sign-in.
+
+| Method | Endpoint | Access | Description |
+|---|---|---|---|
+| POST | `/api/v1/listings/{listingId}/offers` | signed in | send an offer → 201 + offer |
+| GET | `/api/v1/listings/{listingId}/offers` | listing author or admin | offers on a listing, pending first |
+| GET | `/api/v1/offers/mine` | signed in | my sent offers (all statuses, newest first) with the listing title |
+| POST | `/api/v1/offers/{id}/accept` | listing author | accept → other pending offers are rejected and the listing moves to `in_progress` |
+| POST | `/api/v1/offers/{id}/reject` | listing author | reject |
+| POST | `/api/v1/offers/{id}/withdraw` | offer author | withdraw my offer |
+
+```json
+{ "price": 280, "deliveryDays": 14, "message": "I have designed logos for 6 years…" }
+```
+
+- statuses: `pending` → `accepted` / `rejected` / `withdrawn`; only a pending offer can change
+- rules: price > 0 and ≤ 1 000 000 € (cents at most), delivery 1–365 days, message required, max 2000 characters
+- one live (pending or accepted) offer per specialist and listing – after withdrawing, a new one can be sent; a partial unique index guards this in the database too
+- the response includes `listingTitle` (from Listings via `IListingsApi`) and `freelancer` – `{ id, displayName, type, city }` from Profiles via `IProfilesApi`, `null` without a profile
+- **accepting** spans two modules: the offer changes are written in a transaction that is committed only after Listings has moved the listing to `in_progress`; if the listing is no longer open, nothing changes (409)
+- errors: `offer.invalid_price`, `offer.invalid_delivery_days`, `offer.message_required`, `offer.message_too_long` (400), `offer.own_listing`, `offer.not_listing_owner`, `offer.not_author` (403), `listing.not_found`, `offer.not_found` (404), `offer.listing_not_open`, `offer.already_sent`, `offer.invalid_status_change` (409)
 
 ## CORS
 

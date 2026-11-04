@@ -6,6 +6,7 @@ using Vybavim.Common.Extensions;
 using Vybavim.Modules.Identity;
 using Vybavim.Modules.Listings;
 using Vybavim.Modules.Profiles;
+using Vybavim.Modules.Projects;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -60,6 +61,7 @@ builder.Services.AddCurrentUser();
 builder.Services.AddIdentityModule(builder.Configuration);
 builder.Services.AddProfilesModule(builder.Configuration);
 builder.Services.AddListingsModule(builder.Configuration);
+builder.Services.AddProjectsModule(builder.Configuration);
 
 var app = builder.Build();
 
@@ -99,5 +101,6 @@ app.MapGet("/api/v1/health", () => Results.Ok(new { status = "ok" }))
 app.MapIdentityEndpoints();
 app.MapProfilesEndpoints();
 app.MapListingsEndpoints();
+app.MapProjectsEndpoints();
 
 await app.RunAsync();

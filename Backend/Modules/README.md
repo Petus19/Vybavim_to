@@ -17,8 +17,9 @@ Listings/
 |---|---|
 | `Identity` | ✅ accounts, password and Google sign-in, tokens, roles |
 | `Profiles` | ✅ public profiles; exposes `IProfilesApi` in `Profiles.Contracts` |
-| `Listings` | ✅ categories, search, create / update / withdraw listings |
-| `Projects`, `Chat`, `Notifications`, `Reviews`, `Payments`, `Admin`, `Gdpr` | empty skeletons for later phases |
+| `Listings` | ✅ categories, search, create / update / withdraw listings; exposes `IListingsApi` in `Listings.Contracts` |
+| `Projects` | ✅ offers on listings (send, accept, reject, withdraw); uses `IListingsApi` and `IProfilesApi`. The project itself (agreement, delivery) comes later |
+| `Chat`, `Notifications`, `Reviews`, `Payments`, `Admin`, `Gdpr` | empty skeletons for later phases |
 
 **Rules**
 
