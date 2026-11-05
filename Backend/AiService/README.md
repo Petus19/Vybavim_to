@@ -6,8 +6,8 @@ A separate **Python (FastAPI)** service for the AI and machine-learning features
 |---|---|---|
 | 1 – Foundation | FastAPI app, configuration, tests, lint, Docker image, CI | ✅ |
 | 2 – Semantic search | multilingual sentence embeddings → pgvector (HNSW index); `/index`, `/search`, `/listings/{id}/similar` | ✅ |
-| 3 – Evaluation | labelled query set; recall@5 and MRR of keyword search vs. semantic search | next |
-| 4 – Trained model | scikit-learn classifier on embeddings that suggests a listing category; train/test split, F1, confusion matrix | planned |
+| 3 – Evaluation | labelled query set; recall@5 and MRR of keyword search, BM25, two embedding models and a hybrid | ✅ |
+| 4 – Trained model | scikit-learn classifier on embeddings that suggests a listing category; train/test split, F1, confusion matrix | next |
 | 5 – Integration | the C# API calls the service; the main app keeps working when it is down | planned |
 
 ## Stack
@@ -22,7 +22,7 @@ GET  /search?q=…              query → same model → nearest vectors in pgve
 GET  /listings/{id}/similar   nearest vectors to that listing's vector
 ```
 
-- **Model:** [`paraphrase-multilingual-MiniLM-L12-v2`](https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2) – a pretrained multilingual sentence-transformer (50+ languages incl. Slovak), 384-dimensional vectors, runs on CPU. Chosen over `multilingual-e5-small` after a quick comparison on Slovak queries (6/6 vs 5/6 correct top results, and much better separated scores); step 3 measures this properly.
+- **Model:** [`paraphrase-multilingual-MiniLM-L12-v2`](https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2) – a pretrained multilingual sentence-transformer (50+ languages incl. Slovak), 384-dimensional vectors, runs on CPU. Compared with `multilingual-e5-small` in the [evaluation](#evaluation): same recall, e5 ranks the first hit slightly higher, but only this model's scores separate "good match" from "nothing relevant" well enough for a minimum-score cut-off.
 - **Text per listing:** title, category, description and skills (`listing_text.py`).
 - **Vectors are normalized** (length 1), so cosine similarity = dot product; pgvector's `<=>` operator returns cosine distance and the result `score` is `1 − distance`.
 - **HNSW index** (`vector_cosine_ops`) finds nearest neighbours without comparing against every row.
@@ -39,7 +39,49 @@ First results on the 12 demo listings (score = cosine similarity):
 | *webstránka pre penzión* ("website for a guesthouse") | Landing page for a fitness app 0.45; the guesthouse SEO job only 3rd | ⚠️ |
 | *niečo s účtovníctvom* ("something with accounting") | best score 0.26 – nothing relevant exists | ⚠️ low scores = no good match |
 
-The weak cases are the reason for step 3: a labelled query set and metrics instead of impressions, and later a hybrid of keyword + semantic search and a minimum score.
+The weak cases were the reason for step 3: a labelled query set and metrics instead of impressions.
+
+## Evaluation
+
+```bash
+uv run python -m ai_service.evaluation                       # the service's model
+uv run python -m ai_service.evaluation --model A --model B   # compare embedding models
+```
+
+**Test set** (`src/ai_service/evaluation/data/`): 60 listings, 15 in each of the 4 categories, and 43 Slovak queries with hand-labelled correct listings. Queries are grouped by kind – `exact` words from the listing, `synonym` (different words, same meaning), `no-diacritics`, `typo`, `natural` (a whole sentence) and 6 `no-answer` queries with no correct listing. **The data is synthetic** – written for this project, not collected from users.
+
+**Methods compared:**
+- **keyword** – a faithful copy of the current C# API search: the whole query as one substring of title + description + skills, ignoring case and diacritics (`ILIKE` + `unaccent`), no relevance ranking;
+- **BM25** – classic full-text ranking (as in Lucene / Elasticsearch), with words cut to their first 5 characters as a crude Slovak stemmer – a deliberately strong non-AI baseline;
+- **semantic** – cosine similarity of embeddings, the same text and maths as the service (exact search in memory instead of HNSW);
+- **hybrid** – BM25 and semantic rankings merged with Reciprocal Rank Fusion (`1 / (60 + rank)` summed over both lists).
+
+**Metrics:** **recall@5** – share of correct listings among the first 5 results; **MRR** – mean of `1 / position` of the first correct result (1st → 1, 2nd → 0.5, not in top 10 → 0). Per-kind columns are recall@5.
+
+| Method | recall@5 | MRR | exact | synonym | no-diacritics | typo | natural |
+|---|---|---|---|---|---|---|---|
+| keyword (current C# API) | **0.24** | 0.27 | 0.86 | 0.00 | 0.75 | 0.00 | 0.00 |
+| BM25 | **0.82** | 0.79 | 0.93 | 0.80 | 1.00 | 0.75 | 0.60 |
+| semantic – paraphrase-multilingual-MiniLM-L12-v2 (used) | **0.86** | 0.85 | 0.76 | 0.90 | 1.00 | 0.75 | 0.80 |
+| semantic – multilingual-e5-small | **0.86** | 0.94 | 0.89 | 0.76 | 1.00 | 1.00 | 0.90 |
+| hybrid – BM25 + MiniLM | **0.91** | 0.87 | 1.00 | 0.90 | 1.00 | 0.75 | 0.90 |
+| hybrid – BM25 + e5 | **0.91** | 0.92 | 0.93 | 0.85 | 1.00 | 1.00 | 0.90 |
+
+**Minimum score** – semantic search always returns *something*. Share of queries kept / rejected when results below a cut-off are hidden:
+
+| MiniLM cut-off | answerable queries still answered | no-answer queries rejected | | e5 cut-off | answered | rejected |
+|---|---|---|---|---|---|---|
+| 0.32 | 95% | 50% | | 0.828 | 100% | 17% |
+| **0.41** | **92%** | **83%** | | 0.843 | 89% | 67% |
+| 0.50 | 73% | 100% | | 0.857 | 65% | 83% |
+
+**What it shows:**
+- The current keyword search finds exact words but **nothing** for synonyms, typos or whole sentences – recall@5 0.24.
+- Even without AI, BM25 with a crude stemmer reaches 0.82 – a fair baseline matters; semantic search is better mainly on synonyms and natural sentences (0.90 / 0.80 vs 0.80 / 0.60).
+- The **hybrid is best (0.91)**: BM25 catches exact words and product names, embeddings catch meaning.
+- e5 ranks better (MRR 0.94), but its scores sit in a narrow 0.81–0.90 band for both good and irrelevant queries, so a cut-off barely works. MiniLM at ~0.4 hides 5 of 6 irrelevant queries and keeps 92 % of the good ones – so it stays the default.
+- **Caveats:** 37 answerable queries – one query moves recall by ~0.03, so differences of a few hundredths are noise; the same person wrote listings, queries and labels.
+- **Next for the product** (step 5): serve the hybrid with a minimum score.
 
 ## Running locally
 
@@ -70,6 +112,9 @@ uv run ruff format .    # format code
 | `test_listings_client.py` | paging through the C# API and reading details (mocked HTTP) |
 | `test_listing_text.py` | listing text and content hash |
 | `test_model.py` | the real model puts "logo" closer to "visual identity" than to "network repair" (`-m model`) |
+| `test_evaluation_metrics.py` | recall@k and reciprocal rank on hand-computed examples |
+| `test_retrievers.py` | keyword search behaves like the C# API, BM25, semantic ranking, Reciprocal Rank Fusion |
+| `test_evaluation.py` | test-set consistency (labels point to existing listings, balanced categories) and the evaluation run |
 
 The same checks (without the model test) and a Docker build run in CI on every pull request.
 
@@ -106,6 +151,7 @@ AiService/
     listings_client.py    reads listings from the C# API
     repository.py         pgvector storage and nearest-neighbour queries
     indexer.py            incremental (re)indexing
+    evaluation/           test set (data/*.json), metrics, keyword/BM25/semantic/hybrid retrievers, report
   tests/                  pytest; fakes.py = fake model, storage and listings for fast API tests
   Dockerfile
 ```
