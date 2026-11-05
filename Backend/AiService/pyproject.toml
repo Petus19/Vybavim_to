@@ -1,0 +1,52 @@
+# Popis Python projektu – obdoba .csproj v C#: názov, verzia Pythonu, závislosti a nastavenia nástrojov.
+# Balíčky sa pridávajú príkazom `uv add <balíček>`, presné verzie sa zapíšu do uv.lock.
+
+[project]
+name = "ai-service"
+version = "0.1.0"
+description = "AI service of the Vybavím to marketplace: embeddings, semantic search and ML models."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.162.0",
+    "pydantic-settings>=2.16.2",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[dependency-groups]
+# Iba na vývoj a testy – do Docker obrazu sa nedostanú
+dev = [
+    "httpx2>=2.16.0",
+    "pytest>=9.2.0",
+    "ruff>=0.17.3",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# Kód je v src/ai_service/ (tzv. src layout) – testy tak skúšajú nainštalovaný balíček,
+# nie náhodne súbory z aktuálneho priečinka.
+[tool.hatch.build.targets.wheel]
+packages = ["src/ai_service"]
+
+# --- Ruff: linter + formátovač (obdoba analyzérov a .editorconfig v C#) ---
+[tool.ruff]
+line-length = 110
+target-version = "py313"
+
+[tool.ruff.lint]
+# E/F = základné chyby, I = poradie importov, B = časté chyby, UP = moderná syntax, N = názvy, S = bezpečnosť
+select = ["E", "F", "I", "B", "UP", "N", "S", "SIM", "RUF"]
+
+# Slovenské texty používajú pomlčku „–“ zámerne – nie je to zamenené mínus
+allowed-confusables = ["–"]
+
+[tool.ruff.lint.per-file-ignores]
+# V testoch je assert v poriadku (S101 inak varuje, že assert sa dá vypnúť)
+"tests/**" = ["S101"]
+
+# --- Pytest ---
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
