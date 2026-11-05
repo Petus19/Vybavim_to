@@ -101,6 +101,7 @@ Modules that exist as empty skeletons for later phases: Chat, Notifications, Rev
 | API docs | OpenAPI + Scalar UI |
 | Testing | xUnit v3 (Microsoft.Testing.Platform), Testcontainers, WebApplicationFactory |
 | Dev environment | Docker Compose: PostgreSQL, Redis, S3-compatible storage (RustFS), Mailpit |
+| AI service | Python 3.13, FastAPI, uv, pytest, Ruff – embeddings and ML models (in progress, see [`Backend/AiService`](Backend/AiService/README.md)) |
 | CI | GitHub Actions |
 
 ---
@@ -187,9 +188,9 @@ Base URL `http://localhost:5080/api/v1` · full reference in [`Backend/Api/READM
 |---|---|---|
 | 0 – Foundation | architecture, Docker, database, search API, tests, CI | ✅ done |
 | 1 – MVP | accounts ✅, Google sign-in ✅, profiles ✅, posting listings ✅, offers on listings ✅ (API), **choosing a specialist → project**, chat, reviews, email notifications, GDPR tools | in progress |
-| 2 – Monetization & AI | Stripe subscriptions; first AI features in a separate **Python (FastAPI) service**: listing-writing assistant (LLM), semantic search with pgvector embeddings, content moderation | planned |
+| 2 – Monetization & AI | Stripe subscriptions; AI features in a separate **Python (FastAPI) service** (foundation ✅): listing-writing assistant (LLM), semantic search with pgvector embeddings, content moderation | planned |
 | 3 – Growth | mobile app (Expo) on the same API, escrow payments, matching/recommendations and fraud detection (ML) | planned |
 
-The AI service will subscribe to domain events and call the public module APIs instead of reading the database directly, so it has the same permissions as a regular user.
+The AI service never reads other modules' tables: it calls the public REST API (later it will also subscribe to domain events), so it has the same permissions as a regular user. It keeps only its own `ai` schema for embeddings.
 
 The original technical design document (Slovak) is in [`docs/technical-design.sk.md`](docs/technical-design.sk.md).

@@ -44,6 +44,38 @@ jobs:
       - name: Tests
         run: dotnet test --no-build --configuration Release
 
+  ai-service:
+    name: AI service (lint + tests + Docker)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Backend/AiService
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # uv installs the Python version from .python-version and caches packages
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+          cache-dependency-glob: Backend/AiService/uv.lock
+
+      - name: Install packages (exactly as in uv.lock)
+        run: uv sync --locked
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Format check
+        run: uv run ruff format --check .
+
+      - name: Tests
+        run: uv run pytest -W error
+
+      - name: Docker image builds
+        run: docker build -t vybavim-ai-service:ci .
+
   web:
     name: Web (lint + types + build)
     runs-on: ubuntu-latest
