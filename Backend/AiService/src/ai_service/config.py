@@ -18,8 +18,12 @@ class Settings(BaseSettings):
     api_base_url: str = "http://localhost:5080"
 
     # Databáza pre vlastnú schému "ai" (embeddingy). Rovnaký PostgreSQL ako docker-compose.yml,
-    # vývojové heslo ako v appsettings.Development.json. Použijeme ju v ďalšom kroku.
+    # vývojové heslo ako v appsettings.Development.json.
     database_url: str = "postgresql://vybavim:vybavim@localhost:5432/vybavim"
+
+    # Viacjazyčný embedding model (vie aj po slovensky), 384 čísel na text, beží na CPU.
+    # Vybraný porovnaním so multilingual-e5-small na slovenských dopytoch.
+    embedding_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 
 
 @lru_cache

@@ -20,6 +20,7 @@
 - **Domain modelling** – entities protect their own rules (factory methods, private setters, explicit state transitions); every broken rule has a stable error code and a human-readable message.
 - **A real REST API** – accent- and case-insensitive text search with filters, paging, authentication with access/refresh tokens and Google sign-in, role-based authorization, RFC 9457 error responses, OpenAPI docs.
 - **Testing and CI** – 118 automated tests: unit, architecture, and integration tests that run the whole API against a throw-away PostgreSQL in Docker (Testcontainers). GitHub Actions builds and tests the backend and frontend on every pull request.
+- **AI service (Python)** – a FastAPI service next to the C# API: multilingual sentence embeddings stored in PostgreSQL with pgvector (HNSW) power semantic search and "similar listings" – a query like "someone to design a company sign" finds the logo job with no words in common. Tested with pytest and Testcontainers; see [`Backend/AiService`](Backend/AiService/README.md).
 - **Teamwork** – two developers, every change goes through a branch, a descriptive pull request and a green CI run. The web client consumes TypeScript types generated from the API's OpenAPI document.
 
 ## Team
@@ -101,7 +102,7 @@ Modules that exist as empty skeletons for later phases: Chat, Notifications, Rev
 | API docs | OpenAPI + Scalar UI |
 | Testing | xUnit v3 (Microsoft.Testing.Platform), Testcontainers, WebApplicationFactory |
 | Dev environment | Docker Compose: PostgreSQL, Redis, S3-compatible storage (RustFS), Mailpit |
-| AI service | Python 3.13, FastAPI, uv, pytest, Ruff – embeddings and ML models (in progress, see [`Backend/AiService`](Backend/AiService/README.md)) |
+| AI service | Python 3.13, FastAPI, uv, pytest, Ruff – sentence-transformers, pgvector – embeddings and semantic search (in progress, see [`Backend/AiService`](Backend/AiService/README.md)) |
 | CI | GitHub Actions |
 
 ---
@@ -188,7 +189,7 @@ Base URL `http://localhost:5080/api/v1` · full reference in [`Backend/Api/READM
 |---|---|---|
 | 0 – Foundation | architecture, Docker, database, search API, tests, CI | ✅ done |
 | 1 – MVP | accounts ✅, Google sign-in ✅, profiles ✅, posting listings ✅, offers on listings ✅ (API), **choosing a specialist → project**, chat, reviews, email notifications, GDPR tools | in progress |
-| 2 – Monetization & AI | Stripe subscriptions; AI features in a separate **Python (FastAPI) service** (foundation ✅): listing-writing assistant (LLM), semantic search with pgvector embeddings, content moderation | planned |
+| 2 – Monetization & AI | Stripe subscriptions; AI features in a separate **Python (FastAPI) service** (foundation ✅, semantic search ✅): listing-writing assistant (LLM), semantic search with pgvector embeddings, content moderation | planned |
 | 3 – Growth | mobile app (Expo) on the same API, escrow payments, matching/recommendations and fraud detection (ML) | planned |
 
 The AI service never reads other modules' tables: it calls the public REST API (later it will also subscribe to domain events), so it has the same permissions as a regular user. It keeps only its own `ai` schema for embeddings.
