@@ -4,7 +4,7 @@
 
 **A two-sided service marketplace** – people and small businesses post a job ("logo for my café", "office network support"), and freelancers or agencies respond. The first target market is IT and graphic design in Slovakia (hence the Slovak UI; *Vybavím to* means *"I'll get it done"*).
 
-> **Status:** work in progress (started October 2026). Browsing and search, accounts (email/password + Google) and posting/managing listings work end to end (web + API + database). User profiles are done in the API; the profile page on the web is next. Then offers, chat and reviews – see [Roadmap](#roadmap).
+> **Status:** work in progress (started October 2026). Browsing and search, accounts (email/password + Google) and posting/managing listings work end to end (web + API + database). Profiles and **offers on listings** (send, accept → listing moves to in-progress, reject, withdraw) are done in the API; their web pages are next. Then projects, chat and reviews – see [Roadmap](#roadmap).
 
 | Listings with search and filters | Listing detail |
 |---|---|
@@ -18,8 +18,8 @@
 
 - **Backend architecture** – a *modular monolith* in C# / ASP.NET Core (.NET 10): each business module owns its code, its database schema and a small public contract. Module boundaries are enforced by the compiler **and** by automated architecture tests.
 - **Domain modelling** – entities protect their own rules (factory methods, private setters, explicit state transitions); every broken rule has a stable error code and a human-readable message.
-- **A real REST API** – search with accent-insensitive full-text and filters, paging, authentication with access/refresh tokens and Google sign-in, role-based authorization, RFC 9457 error responses, OpenAPI docs.
-- **Testing and CI** – 95 automated tests: unit, architecture, and integration tests that run the whole API against a throw-away PostgreSQL in Docker (Testcontainers). GitHub Actions builds and tests the backend and frontend on every pull request.
+- **A real REST API** – accent- and case-insensitive text search with filters, paging, authentication with access/refresh tokens and Google sign-in, role-based authorization, RFC 9457 error responses, OpenAPI docs.
+- **Testing and CI** – 118 automated tests: unit, architecture, and integration tests that run the whole API against a throw-away PostgreSQL in Docker (Testcontainers). GitHub Actions builds and tests the backend and frontend on every pull request.
 - **Teamwork** – two developers, every change goes through a branch, a descriptive pull request and a green CI run. The web client consumes TypeScript types generated from the API's OpenAPI document.
 
 ## Team
@@ -41,8 +41,10 @@ flowchart LR
     subgraph api["API – ASP.NET Core (.NET 10), modular monolith"]
         identity["Identity<br/>accounts, tokens, roles"]
         profiles["Profiles"]
+        projects["Projects<br/>offers"]
         listings["Listings<br/>search, CRUD"]
         listings -. "IProfilesApi<br/>(Profiles.Contracts)" .-> profiles
+        projects -. "IListingsApi" .-> listings
     end
     api --> db[("PostgreSQL 17<br/>schema per module")]
     web -. "OAuth 2.0 + PKCE" .-> google["Google sign-in"]
@@ -69,11 +71,11 @@ Frontend/
 
 1. A module may reference another module **only through its `.Contracts` project** (e.g. Listings asks Profiles for the listing author via `IProfilesApi`). No circular dependencies, no reaching into another module's tables.
 2. Everything inside a module is `internal`; the only public type is `{Module}Module` (`AddListingsModule()`, `MapListingsEndpoints()`).
-3. Each module has its **own PostgreSQL schema** and migration history (`identity`, `profiles`, `listings`).
+3. Each module has its **own PostgreSQL schema** and migration history (`identity`, `profiles`, `listings`, `projects`).
 4. Expected errors are values (`Error` + `Result<T>`), mapped to `400/401/403/404/409` ProblemDetails with a `code` field the web uses to highlight form fields.
 5. Rules 1–3 are checked by **architecture tests** (reflection over the compiled assemblies).
 
-Modules that exist as empty skeletons for later phases: Projects, Chat, Notifications, Reviews, Payments, Admin, Gdpr.
+Modules that exist as empty skeletons for later phases: Chat, Notifications, Reviews, Payments, Admin, Gdpr.
 
 ### Where to look in the code
 
@@ -82,6 +84,7 @@ Modules that exist as empty skeletons for later phases: Projects, Chat, Notifica
 | Domain entity with rules and state transitions | [`Modules/Listings/Listings/Domain/Listing.cs`](Backend/Modules/Listings/Listings/Domain/Listing.cs) |
 | Search query (filters → one SQL statement) | [`Modules/Listings/Listings/Application/SearchListings.cs`](Backend/Modules/Listings/Listings/Application/SearchListings.cs) |
 | Cross-module contract and its use | [`Profiles.Contracts/IProfilesApi.cs`](Backend/Modules/Profiles/Profiles.Contracts/IProfilesApi.cs), [`GetListingDetail.cs`](Backend/Modules/Listings/Listings/Application/GetListingDetail.cs) |
+| Business process across two modules (offer accepted → listing in progress) | [`Modules/Projects/Projects/Application/AcceptOffer.cs`](Backend/Modules/Projects/Projects/Application/AcceptOffer.cs) |
 | Authentication use case | [`Modules/Identity/Identity/Application/LoginUser.cs`](Backend/Modules/Identity/Identity/Application/LoginUser.cs) |
 | Architecture tests | [`Tests/ArchitectureTests/ModuleBoundaryTests.cs`](Backend/Tests/ArchitectureTests/ModuleBoundaryTests.cs) |
 | Integration tests (API + real PostgreSQL) | [`Tests/IntegrationTests/ListingsManageTests.cs`](Backend/Tests/IntegrationTests/ListingsManageTests.cs) |
@@ -92,7 +95,7 @@ Modules that exist as empty skeletons for later phases: Projects, Chat, Notifica
 | Area | Technology |
 |---|---|
 | Backend | C#, .NET 10, ASP.NET Core Minimal APIs, ASP.NET Core Identity, EF Core + Npgsql |
-| Database | PostgreSQL 17 (`unaccent` full-text; PostGIS and pgvector available in the image) |
+| Database | PostgreSQL 17 (`unaccent` text search; PostGIS and pgvector available in the image) |
 | Frontend | Next.js 16, React 19, TypeScript, Tailwind CSS 4, shadcn/ui, openapi-fetch |
 | Auth | Bearer access/refresh tokens, roles, Google sign-in (OAuth 2.0 + PKCE), lockout after failed logins |
 | API docs | OpenAPI + Scalar UI |
@@ -137,7 +140,7 @@ npm run dev
 
 ```bash
 cd Backend
-dotnet test        # 95 tests; Docker must be running (integration tests start their own PostgreSQL)
+dotnet test        # 118 tests; Docker must be running (integration tests start their own PostgreSQL)
 ```
 
 ```bash
@@ -172,6 +175,9 @@ Base URL `http://localhost:5080/api/v1` · full reference in [`Backend/Api/READM
 | POST / PUT | `/listings`, `/listings/{id}` | signed in / author | create, edit |
 | POST | `/listings/{id}/cancel` | author or admin | withdraw a listing |
 | GET | `/listings/mine` | signed in | my listings |
+| POST / GET | `/listings/{id}/offers` | signed in / listing author | send an offer / see offers on my listing |
+| GET | `/offers/mine` | signed in | my sent offers |
+| POST | `/offers/{id}/accept`, `/reject`, `/withdraw` | listing author / offer author | decide on an offer |
 
 ---
 
@@ -180,7 +186,7 @@ Base URL `http://localhost:5080/api/v1` · full reference in [`Backend/Api/READM
 | Phase | Scope | Status |
 |---|---|---|
 | 0 – Foundation | architecture, Docker, database, search API, tests, CI | ✅ done |
-| 1 – MVP | accounts ✅, Google sign-in ✅, profiles ✅, posting listings ✅, **offers on listings**, choosing a specialist → project, chat, reviews, email notifications, GDPR tools | in progress |
+| 1 – MVP | accounts ✅, Google sign-in ✅, profiles ✅, posting listings ✅, offers on listings ✅ (API), **choosing a specialist → project**, chat, reviews, email notifications, GDPR tools | in progress |
 | 2 – Monetization & AI | Stripe subscriptions; first AI features in a separate **Python (FastAPI) service**: listing-writing assistant (LLM), semantic search with pgvector embeddings, content moderation | planned |
 | 3 – Growth | mobile app (Expo) on the same API, escrow payments, matching/recommendations and fraud detection (ML) | planned |
 

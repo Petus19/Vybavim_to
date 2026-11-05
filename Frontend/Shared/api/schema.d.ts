@@ -11,7 +11,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Kontrola, či API beží */
+        /** Health check */
         get: {
             parameters: {
                 query?: never;
@@ -47,7 +47,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Registrácia nového používateľa (e-mail + heslo) */
+        /** Register a new user (email + password) */
         post: operations["Register"];
         delete?: never;
         options?: never;
@@ -64,7 +64,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Prihlásenie – vráti prístupový a refresh token */
+        /** Sign in – returns an access token and a refresh token */
         post: operations["Login"];
         delete?: never;
         options?: never;
@@ -81,7 +81,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Prihlásenie cez Google – ID token od Google vymení za naše tokeny */
+        /** Sign in with Google – exchanges a Google ID token for our tokens */
         post: operations["LoginWithGoogle"];
         delete?: never;
         options?: never;
@@ -98,7 +98,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Nový prístupový token podľa refresh tokenu */
+        /** Get a new access token using a refresh token */
         post: operations["RefreshToken"];
         delete?: never;
         options?: never;
@@ -113,7 +113,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Údaje o prihlásenom používateľovi */
+        /** Current user */
         get: operations["GetMe"];
         put?: never;
         post?: never;
@@ -130,8 +130,43 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Zoznam všetkých používateľov (iba admin) */
+        /** List all users (admin only) */
         get: operations["GetUsers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/profiles/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** My profile (404 until it is created) */
+        get: operations["GetMyProfile"];
+        /** Create or update my profile */
+        put: operations["SaveMyProfile"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/profiles/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Public user profile */
+        get: operations["GetProfile"];
         put?: never;
         post?: never;
         delete?: never;
@@ -147,7 +182,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Zoznam hlavných kategórií */
+        /** List main categories */
         get: operations["GetCategories"];
         put?: never;
         post?: never;
@@ -164,10 +199,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Vyhľadávanie inzerátov s filtrami a zoradením */
+        /** Search listings with filters, sorting and paging */
         get: operations["SearchListings"];
         put?: never;
-        /** Pridanie inzerátu – autorom je prihlásený používateľ */
+        /** Create a listing – the signed-in user becomes its author */
         post: operations["CreateListing"];
         delete?: never;
         options?: never;
@@ -182,9 +217,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Detail inzerátu */
+        /** Listing detail, including the author's profile */
         get: operations["GetListing"];
-        /** Úprava inzerátu – iba autor a iba kým je otvorený */
+        /** Update a listing – author only, while the listing is open */
         put: operations["UpdateListing"];
         post?: never;
         delete?: never;
@@ -202,7 +237,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Stiahnutie inzerátu – autor alebo admin */
+        /** Withdraw a listing – author or admin */
         post: operations["CancelListing"];
         delete?: never;
         options?: never;
@@ -217,10 +252,96 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Moje inzeráty – všetky stavy, najnovšie prvé */
+        /** My listings – all statuses, newest first */
         get: operations["GetMyListings"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/listings/{listingId}/offers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Offers on a listing – listing author or admin only */
+        get: operations["GetListingOffers"];
+        put?: never;
+        /** Send an offer on a listing – the signed-in user becomes its author */
+        post: operations["SendOffer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/offers/mine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** My sent offers – all statuses, newest first */
+        get: operations["GetMyOffers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/offers/{id}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Accept an offer – listing author only; other pending offers are rejected and the listing moves to in_progress */
+        post: operations["AcceptOffer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/offers/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject an offer – listing author only */
+        post: operations["RejectOffer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/offers/{id}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Withdraw my offer – while it is pending */
+        post: operations["WithdrawOffer"];
         delete?: never;
         options?: never;
         head?: never;
@@ -259,6 +380,13 @@ export interface components {
         Engagement: "one_time" | "ongoing";
         /** @enum {unknown} */
         ExperienceLevel: "beginner" | "intermediate" | "expert";
+        FreelancerResponse: {
+            /** Format: uuid */
+            id: string;
+            displayName: string;
+            type: components["schemas"]["ProfileType"];
+            city: null | string;
+        };
         GoogleLoginRequest: {
             idToken: string;
         };
@@ -285,6 +413,7 @@ export interface components {
             requirements: string[];
             /** Format: uuid */
             ownerId: string;
+            owner: null | components["schemas"]["ListingOwnerResponse"];
         };
         ListingInput: {
             category: string;
@@ -302,6 +431,13 @@ export interface components {
             skills: string[];
             deliverables: null | string[];
             requirements: null | string[];
+        };
+        ListingOwnerResponse: {
+            /** Format: uuid */
+            id: string;
+            displayName: string;
+            type: components["schemas"]["ProfileType"];
+            city: null | string;
         };
         /** @enum {unknown} */
         ListingStatus: "open" | "in_progress" | "completed" | "cancelled";
@@ -322,6 +458,35 @@ export interface components {
             login: string;
             password: string;
         };
+        OfferInput: {
+            /** Format: double */
+            price: number;
+            /** Format: int32 */
+            deliveryDays: number;
+            message: string;
+        };
+        OfferResponse: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            listingId: string;
+            listingTitle: null | string;
+            /** Format: uuid */
+            freelancerId: string;
+            freelancer: null | components["schemas"]["FreelancerResponse"];
+            /** Format: double */
+            price: number;
+            /** Format: int32 */
+            deliveryDays: number;
+            message: string;
+            status: components["schemas"]["OfferStatus"];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        /** @enum {unknown} */
+        OfferStatus: "pending" | "accepted" | "rejected" | "withdrawn";
         PagedResponseOfListingSummaryResponse: {
             items: components["schemas"]["ListingSummaryResponse"][];
             /** Format: int32 */
@@ -331,6 +496,30 @@ export interface components {
             /** Format: int32 */
             pageSize: number;
         };
+        ProfileInput: {
+            type: components["schemas"]["ProfileType"];
+            displayName: string;
+            city: null | string;
+            bio: null | string;
+            skills: null | string[];
+            website: null | string;
+        };
+        ProfileResponse: {
+            /** Format: uuid */
+            userId: string;
+            type: components["schemas"]["ProfileType"];
+            displayName: string;
+            city: null | string;
+            bio: null | string;
+            skills: string[];
+            website: null | string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        /** @enum {unknown} */
+        ProfileType: "person" | "company";
         /** @enum {unknown} */
         ProjectSize: "small" | "medium" | "large";
         RefreshRequest: {
@@ -498,6 +687,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserResponse"][];
+                };
+            };
+        };
+    };
+    GetMyProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileResponse"];
+                };
+            };
+        };
+    };
+    SaveMyProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfileInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileResponse"];
+                };
+            };
+        };
+    };
+    GetProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileResponse"];
                 };
             };
         };
@@ -672,6 +927,140 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PagedResponseOfListingSummaryResponse"];
+                };
+            };
+        };
+    };
+    GetListingOffers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listingId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OfferResponse"][];
+                };
+            };
+        };
+    };
+    SendOffer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listingId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OfferInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OfferResponse"];
+                };
+            };
+        };
+    };
+    GetMyOffers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OfferResponse"][];
+                };
+            };
+        };
+    };
+    AcceptOffer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OfferResponse"];
+                };
+            };
+        };
+    };
+    RejectOffer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OfferResponse"];
+                };
+            };
+        };
+    };
+    WithdrawOffer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OfferResponse"];
                 };
             };
         };

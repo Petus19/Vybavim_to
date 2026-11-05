@@ -45,7 +45,7 @@ The API address can be changed in `.env.local` (template `.env.example`): `API_U
 | `/inzeraty` | `src/app/inzeraty/page.tsx` | listings with search, categories, a "Filters" panel and sorting |
 | `/inzeraty/[id]` | `src/app/inzeraty/[id]/page.tsx` | detail: facts as tiles, deliverables, skills, requirements, similar listings |
 | `/prihlasenie` | `src/app/prihlasenie/page.tsx` | sign in and register (tabs, `?rezim=registracia`, `?navrat=` return path) |
-| `/inzeraty/[id]/ponuka` | `src/app/inzeraty/[id]/ponuka/` | send an offer – **signed in only**, placeholder until the offers API exists |
+| `/inzeraty/[id]/ponuka` | `src/app/inzeraty/[id]/ponuka/` | send an offer – **signed in only**; still a placeholder – the offers API is ready (`POST /api/v1/listings/{id}/offers`, see `Backend/Api/README.md`) |
 | `/pridat-inzerat` | `src/app/pridat-inzerat/` | create a listing in 3 steps – **signed in only** |
 | `/inzeraty/[id]/upravit` | `src/app/inzeraty/[id]/upravit/` | edit a listing – **author only**, open listings only |
 | `/moje-inzeraty` | `src/app/moje-inzeraty/` | my listings in all statuses, withdraw – **signed in only** |
@@ -88,7 +88,7 @@ Fixed prices and hourly rates are **never compared with each other** – ranges 
 ### Not yet in the web app
 
 - **Listing author card** – the API now returns `owner` (from the Profiles module) on the listing detail; the card and a "my profile" page are the next web step.
-- **Number of offers** per listing – comes with the offers API.
+- **Number of offers** per listing – the offers API is ready (`GET /api/v1/listings/{id}/offers` for the author).
 - **City list** for the filter – hard-coded in `src/lib/listings.ts` for now.
 
 ## Authentication
