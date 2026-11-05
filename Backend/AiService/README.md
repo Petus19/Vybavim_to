@@ -5,18 +5,45 @@ A separate **Python (FastAPI)** service for the AI and machine-learning features
 | Step | Scope | Status |
 |---|---|---|
 | 1 – Foundation | FastAPI app, configuration, tests, lint, Docker image, CI | ✅ |
-| 2 – Semantic search | multilingual sentence embeddings → pgvector (HNSW index); `/search`, `/listings/{id}/similar` | next |
-| 3 – Evaluation | labelled query set; recall@5 and MRR of keyword search vs. semantic search | planned |
+| 2 – Semantic search | multilingual sentence embeddings → pgvector (HNSW index); `/index`, `/search`, `/listings/{id}/similar` | ✅ |
+| 3 – Evaluation | labelled query set; recall@5 and MRR of keyword search vs. semantic search | next |
 | 4 – Trained model | scikit-learn classifier on embeddings that suggests a listing category; train/test split, F1, confusion matrix | planned |
 | 5 – Integration | the C# API calls the service; the main app keeps working when it is down | planned |
 
 ## Stack
 
-Python 3.13 · FastAPI · Pydantic (settings and request/response models) · uvicorn · **uv** (Python version, virtual environment and locked dependencies) · pytest · Ruff (lint + format)
+Python 3.13 · FastAPI · Pydantic (settings and request/response models) · uvicorn · **sentence-transformers** + PyTorch (CPU) · **PostgreSQL + pgvector** (psycopg 3) · **uv** (Python version, virtual environment and locked dependencies) · pytest + Testcontainers · Ruff (lint + format)
+
+## Semantic search – how it works
+
+```
+POST /index   C# API (all public listings) → text → embedding model → vector(384) → ai.listing_embeddings
+GET  /search?q=…              query → same model → nearest vectors in pgvector (cosine)
+GET  /listings/{id}/similar   nearest vectors to that listing's vector
+```
+
+- **Model:** [`paraphrase-multilingual-MiniLM-L12-v2`](https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2) – a pretrained multilingual sentence-transformer (50+ languages incl. Slovak), 384-dimensional vectors, runs on CPU. Chosen over `multilingual-e5-small` after a quick comparison on Slovak queries (6/6 vs 5/6 correct top results, and much better separated scores); step 3 measures this properly.
+- **Text per listing:** title, category, description and skills (`listing_text.py`).
+- **Vectors are normalized** (length 1), so cosine similarity = dot product; pgvector's `<=>` operator returns cosine distance and the result `score` is `1 − distance`.
+- **HNSW index** (`vector_cosine_ops`) finds nearest neighbours without comparing against every row.
+- **Incremental indexing:** each row stores a SHA-256 of the text + model name; `/index` only re-embeds new or changed listings and deletes vectors of listings that are no longer public. Second run on unchanged data: `{"indexed": 0, "unchanged": 12, "removed": 0}`.
+- **Data access:** listings come from the public REST API (list + detail), never from the Listings tables. The service owns only the `ai` schema, created at start-up (`CREATE … IF NOT EXISTS`).
+
+First results on the 12 demo listings (score = cosine similarity):
+
+| Query | Top result | |
+|---|---|---|
+| *potrebujem niekoho kto mi navrhne znak firmy* ("someone to design a company sign") | Logo a vizuálna identita pre kaviareň – 0.46 | ✅ no shared words |
+| *nefunguje mi wifi v kancelárii* | Wi-Fi v predajni 0.30, Správa siete v kancelárii 0.29 | ✅ both network jobs on top |
+| *chcem predávať cez internet* ("I want to sell online") | E-shop s domácou kozmetikou – 0.50 | ✅ |
+| *webstránka pre penzión* ("website for a guesthouse") | Landing page for a fitness app 0.45; the guesthouse SEO job only 3rd | ⚠️ |
+| *niečo s účtovníctvom* ("something with accounting") | best score 0.26 – nothing relevant exists | ⚠️ low scores = no good match |
+
+The weak cases are the reason for step 3: a labelled query set and metrics instead of impressions, and later a hybrid of keyword + semantic search and a minimum score.
 
 ## Running locally
 
-Requires [uv](https://docs.astral.sh/uv/). It uses an installed Python 3.13 or downloads one.
+Requires [uv](https://docs.astral.sh/uv/) (it uses an installed Python 3.13 or downloads one), the database from `docker-compose.yml` and the C# API running.
 
 ```bash
 cd Backend/AiService
@@ -25,24 +52,35 @@ uv run uvicorn ai_service.main:app --reload --port 8000
 #   → http://localhost:8000/docs           (interactive API docs)
 ```
 
+The first start downloads the model (~470 MB) into the Hugging Face cache; later starts load it in a few seconds. Then call `POST /index` once and try `GET /search?q=…` in `/docs`.
+
 ## Tests and checks
 
 ```bash
-uv run pytest           # tests
+uv run pytest           # tests (Docker must be running – repository tests use a throw-away pgvector container)
+uv run pytest -m model  # also the test with the real model (large download, skipped by default)
 uv run ruff check .     # lint
 uv run ruff format .    # format code
 ```
 
-The same checks and a Docker build run in CI on every pull request.
+| Test file | What it checks |
+|---|---|
+| `test_search_api.py` | `/index`, `/search`, `/similar` over HTTP with a fake embedder and in-memory storage: incremental indexing, ranking, limits, validation (422), 404 |
+| `test_repository.py` | the real SQL against PostgreSQL + pgvector (Testcontainers): cosine ordering, upsert, similar, delete |
+| `test_listings_client.py` | paging through the C# API and reading details (mocked HTTP) |
+| `test_listing_text.py` | listing text and content hash |
+| `test_model.py` | the real model puts "logo" closer to "visual identity" than to "network repair" (`-m model`) |
+
+The same checks (without the model test) and a Docker build run in CI on every pull request.
 
 ## Docker
 
 ```bash
 docker build -t vybavim-ai-service .
-docker run --rm -p 8000:8000 vybavim-ai-service
+docker run --rm -p 8000:8000 -e AI_API_BASE_URL=http://host.docker.internal:5080 -e AI_DATABASE_URL=postgresql://vybavim:vybavim@host.docker.internal:5432/vybavim vybavim-ai-service
 ```
 
-Multi-stage build: dependencies are installed with uv from `uv.lock`, the final image contains only Python, the virtual environment and the code, and runs as a non-root user.
+Multi-stage build: dependencies are installed with uv from `uv.lock`, the final image contains only Python, the virtual environment and the code, and runs as a non-root user. PyTorch comes from the **CPU-only** index (`[tool.uv.sources]` in `pyproject.toml`): the image is ~2.1 GB instead of ~7 GB with the default CUDA build.
 
 ## Configuration
 
@@ -52,16 +90,22 @@ Environment variables with the `AI_` prefix (or a local `.env` file, never commi
 |---|---|---|
 | `AI_API_BASE_URL` | `http://localhost:5080` | the main C# API – source of listings |
 | `AI_DATABASE_URL` | local PostgreSQL from `docker-compose.yml` | the service's own `ai` schema (embeddings) |
+| `AI_EMBEDDING_MODEL` | `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` | embedding model; a model with a different vector size needs the `ai.listing_embeddings` table recreated |
 
 ## Layout
 
 ```
 AiService/
-  pyproject.toml        project, dependencies, Ruff and pytest settings
-  uv.lock               exact versions of all packages
+  pyproject.toml          project, dependencies, Ruff and pytest settings
+  uv.lock                 exact versions of all packages
   src/ai_service/
-    main.py             creates the FastAPI app (create_app) – like Program.cs
-    config.py           settings from environment variables – like appsettings.json
-  tests/                pytest; TestClient calls the app in memory
+    main.py               FastAPI app, start-up (lifespan), endpoints – like Program.cs
+    config.py             settings from environment variables – like appsettings.json
+    embeddings.py         Embedder protocol + sentence-transformers implementation
+    listing_text.py       listing → text for the model, content hash
+    listings_client.py    reads listings from the C# API
+    repository.py         pgvector storage and nearest-neighbour queries
+    indexer.py            incremental (re)indexing
+  tests/                  pytest; fakes.py = fake model, storage and listings for fast API tests
   Dockerfile
 ```

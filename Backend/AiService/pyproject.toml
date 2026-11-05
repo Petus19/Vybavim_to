@@ -9,17 +9,33 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.162.0",
+    "httpx2>=2.16.0",
+    "numpy>=2.5.4",
+    "pgvector>=0.5.1",
+    "psycopg[binary]>=3.3.8",
     "pydantic-settings>=2.16.2",
+    "sentence-transformers>=6.2.0",
+    "torch>=2.15.0",
     "uvicorn[standard]>=0.54.0",
 ]
 
 [dependency-groups]
 # Iba na vývoj a testy – do Docker obrazu sa nedostanú
 dev = [
-    "httpx2>=2.16.0",
     "pytest>=9.2.0",
     "ruff>=0.17.3",
+    "testcontainers[postgres]>=4.15.0",
 ]
+
+# PyTorch (potrebuje ho sentence-transformers) iba vo verzii pre procesor (CPU).
+# Predvolená verzia pre Linux obsahuje podporu grafických kariet NVIDIA (CUDA) a má niekoľko GB.
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true   # z tohto zdroja sa berie IBA torch, ostatné balíčky z PyPI
 
 [build-system]
 requires = ["hatchling"]
@@ -49,4 +65,6 @@ allowed-confusables = ["–"]
 # --- Pytest ---
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q"
+# Test so skutočným modelom (sťahuje ~470 MB) sa bežne preskakuje: spustíš ho cez `uv run pytest -m model`
+addopts = "-q -m 'not model'"
+markers = ["model: needs the real embedding model (large download)"]
