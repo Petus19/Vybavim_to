@@ -43,15 +43,21 @@ def terms(text: str, prefix_length: int = PREFIX_LENGTH) -> list[str]:
 
     Skracovanie je najjednoduchší „stemming“ pre slovenčinu: „kaviareň“, „kaviarne“, „kaviarni“
     → všetko „kavia“. Bez neho by BM25 nespojil rôzne pády toho istého slova.
+    Krátke slová sa skloňujú na poslednej samohláske („logo“, „loga“, „logá“), preto sa po skrátení
+    odstráni jedna koncová samohláska – všetko je potom „log“. Aspoň 3 znaky ostanú („SEO“ = „seo“).
     Spojovník medzi písmenami sa zahodí: „Wi-Fi“ = „wifi“, „e-shop“ = „eshop“.
     Čísla sa vynechajú – „do 300 €“ je rozpočet, nie téma inzerátu.
     """
     words = re.findall(r"\w+", re.sub(r"(?<=\w)-(?=\w)", "", normalize(text)))
     return [
-        word[:prefix_length]
+        _stem(word[:prefix_length])
         for word in words
         if len(word) > 1 and word not in STOPWORDS and not word.isdigit()
     ]
+
+
+def _stem(prefix: str) -> str:
+    return prefix[:-1] if len(prefix) > 3 and prefix[-1] in "aeiouy" else prefix
 
 
 @dataclass(frozen=True)
