@@ -66,6 +66,10 @@ public static class IdentityModule
 
         // Testovacie účty (admin) – spustí ich Api iba vo vývoji
         services.AddScoped<IDevDataSeeder, IdentityDevSeeder>();
+        if (DevData.DemoAccountsEnabled(configuration))
+        {
+            services.AddScoped<IDevDataSeeder, IdentityDemoSeeder>();   // demo účty pre AI agenta
+        }
 
         return services;
     }

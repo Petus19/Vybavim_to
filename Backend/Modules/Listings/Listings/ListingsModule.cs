@@ -38,6 +38,10 @@ public static class ListingsModule
 
         // Testovacie inzeráty – spustí ich Api iba vo vývoji (SeedDevDataAsync).
         services.AddScoped<IDevDataSeeder, ListingsDevSeeder>();
+        if (DevData.DemoAccountsEnabled(configuration))
+        {
+            services.AddScoped<IDevDataSeeder, ListingsDemoSeeder>();   // demo účty pre AI agenta
+        }
 
         return services;
     }

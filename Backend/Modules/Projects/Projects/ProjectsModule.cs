@@ -2,10 +2,12 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Vybavim.Common.Database;
 using Vybavim.Common.Extensions;
 using Vybavim.Modules.Projects.Application;
 using Vybavim.Modules.Projects.Endpoints;
 using Vybavim.Modules.Projects.Infrastructure;
+using Vybavim.Modules.Projects.Infrastructure.Seeding;
 
 namespace Vybavim.Modules.Projects;
 
@@ -28,6 +30,11 @@ public static class ProjectsModule
         services.AddScoped<RejectOffer>();
         services.AddScoped<WithdrawOffer>();
         services.AddScoped<OfferResponseBuilder>();
+
+        if (DevData.DemoAccountsEnabled(configuration))
+        {
+            services.AddScoped<IDevDataSeeder, ProjectsDemoSeeder>();   // ponuky pre demo účty AI agenta
+        }
 
         return services;
     }

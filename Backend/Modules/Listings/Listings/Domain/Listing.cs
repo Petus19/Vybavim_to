@@ -133,6 +133,7 @@ internal sealed class Listing
     /// <summary>
     /// Vytvorí nový zverejnený inzerát. Jediný spôsob, ako inzerát vznikne.
     /// Pravidlá overí <see cref="Normalize"/> – rovnaké ako pri úprave.
+    /// <paramref name="id"/> zadávajú iba demo dáta, na ktoré sa odkazujú iné moduly; inak sa vygeneruje.
     /// </summary>
     public static Listing Create(
         Guid ownerId,
@@ -152,13 +153,14 @@ internal sealed class Listing
         IEnumerable<string> skills,
         IEnumerable<string>? deliverables,
         IEnumerable<string>? requirements,
-        DateTimeOffset now)
+        DateTimeOffset now,
+        Guid? id = null)
     {
         var f = Normalize(categoryId, title, description, budgetType, budgetAmount, city, remote, deadline,
             level, size, estimatedDuration, engagement, invoiceRequired, skills, deliverables, requirements, now);
 
         return new Listing(
-            id: Guid.CreateVersion7(now),   // ID zoradené podľa času vzniku
+            id: id ?? Guid.CreateVersion7(now),   // ID zoradené podľa času vzniku
             ownerId: ownerId,
             categoryId: f.CategoryId,
             title: f.Title,
