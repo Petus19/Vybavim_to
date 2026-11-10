@@ -39,9 +39,15 @@ def llm_down() -> LLMError:
 class FakeApi:
     """C# API v pamäti: cesta → odpoveď (alebo ApiError). Zaznamenáva volania."""
 
-    def __init__(self, routes: dict[str, Any]) -> None:
+    def __init__(self, routes: dict[str, Any], posts: dict[str, Any] | None = None) -> None:
         self.routes = routes
+        self.posts = posts or {}
         self.calls: list[tuple[str, dict[str, Any]]] = []
+        self.posted: list[tuple[str, dict[str, Any] | None]] = []  # zápisy, ktoré naozaj prebehli
+
+    def post(self, path: str, body: dict[str, Any] | None = None) -> Any:
+        self.posted.append((path, body))
+        return self.posts[path]
 
     def get(self, path: str, **params: Any) -> Any:
         self.calls.append((path, params))

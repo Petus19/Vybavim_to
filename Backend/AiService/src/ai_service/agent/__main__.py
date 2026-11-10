@@ -17,12 +17,13 @@ from ai_service.agent.loop import Agent, AgentReply, ToolStep
 from ai_service.agent.marketplace import ApiError, MarketplaceClient, SearchClient
 from ai_service.agent.prompts import Role, system_prompt
 from ai_service.agent.providers import create_provider
-from ai_service.agent.tools import ToolRegistry, build_read_tools
+from ai_service.agent.tools import ToolRegistry, build_read_tools, build_write_tools
 
 DEMO_ACCOUNTS: dict[Role, str] = {"client": "client.demo", "specialist": "specialist.demo"}
 
 # Farby v termináli (Windows Terminal aj PowerShell ich podporujú)
-DIM, CYAN, GREEN, RED, BOLD, RESET = "\033[2m", "\033[36m", "\033[32m", "\033[31m", "\033[1m", "\033[0m"
+DIM, CYAN, GREEN, RED, YELLOW = "\033[2m", "\033[36m", "\033[32m", "\033[31m", "\033[33m"
+BOLD, RESET = "\033[1m", "\033[0m"
 
 
 def _arguments(call: ToolCall) -> str:
@@ -34,6 +35,19 @@ def _summary(data: Any) -> str:
     if isinstance(data, dict):
         if "error" in data:
             return f"chyba {data['error']}: {data.get('message', '')}"
+        status = data.get("status")
+        if status == "declined":
+            return "nepotvrdené – nič sa nevykonalo"
+        if status in {"created", "sent", "accepted", "rejected"}:
+            done = {
+                "created": "vytvorené",
+                "sent": "odoslané",
+                "accepted": "prijaté",
+                "rejected": "odmietnuté",
+            }
+            return f"{done[status]} {data.get('url', '')}".rstrip()
+        if "ambiguous" in data:
+            return f"nejednoznačné – {len(data['ambiguous'])} inzeráty"
         for key in ("results", "offers"):
             if key in data:
                 items = data[key]
@@ -55,6 +69,20 @@ def on_event(kind: str, payload: Any) -> None:
         step: ToolStep = payload
         color = RED if step.outcome.is_error else GREEN
         print(f"    {color}{'✗' if step.outcome.is_error else '✓'} {_summary(step.outcome.data)}{RESET}")
+
+
+def confirm(tool_name: str, preview: str) -> bool:
+    """Človek musí každý zápis potvrdiť – model sem nemá prístup, rozhoduje iba odpoveď v termináli."""
+    print(f"\n  {YELLOW}{BOLD}⚠ Agent chce vykonať akciu ({tool_name}):{RESET}")
+    for line in preview.splitlines():
+        print(f"  {YELLOW}│{RESET} {line}")
+    try:
+        answer = input(f"  {YELLOW}Potvrdiť? [y/N]:{RESET} ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        answer = ""
+    approved = answer in {"y", "yes", "a", "ano", "áno"}
+    print(f"    {GREEN + '✓ potvrdené' if approved else RED + '✗ zamietnuté'}{RESET}")
+    return approved
 
 
 def _stats(reply: AgentReply) -> str:
@@ -87,10 +115,16 @@ def main() -> None:
     except ApiError:
         user_name = login
 
-    tools = ToolRegistry(
-        build_read_tools(api, SearchClient(settings.ai_service_url, settings.request_timeout))
+    search = SearchClient(settings.ai_service_url, settings.request_timeout)
+    tools = ToolRegistry([*build_read_tools(api, search), *build_write_tools(api, settings.web_base_url)])
+    agent = Agent(
+        provider,
+        tools,
+        system_prompt(role, user_name, date.today()),
+        settings.max_steps,
+        on_event,
+        confirm,
     )
-    agent = Agent(provider, tools, system_prompt(role, user_name, date.today()), settings.max_steps, on_event)
 
     print(f"{BOLD}Vybavím to – agent{RESET} · {user_name} ({login}) · model {provider.name}")
     print(f"{DIM}Napíš požiadavku po slovensky. Koniec: prázdny riadok alebo Ctrl+C.{RESET}\n")

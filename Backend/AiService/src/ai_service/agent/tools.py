@@ -4,7 +4,9 @@ Každý nástroj má Pydantic model vstupu (z neho vznikne JSON Schema pre model
 overia argumenty, ktoré model pošle) a vracia KOMPAKTNÝ výsledok – ID, názvy, ceny, krátke popisy.
 Model tak nečíta celé odpovede API, čo šetrí tokeny a zmenšuje priestor na chyby.
 
-V tomto kroku iba čítanie. Zapisovacie nástroje (inzerát, ponuka, prijatie) s potvrdením pribudnú ďalej.
+Zapisovacie nástroje (writes=True) sa NIKDY nespustia bez potvrdenia človekom: register najprv ukáže
+náhľad (čo sa vytvorí / pošle / prijme) a HTTP volanie urobí iba po súhlase. Vynucuje to kód, nie prompt –
+model to neobíde, ani keby ho k tomu nahovoril text v inzeráte.
 """
 
 import json
@@ -49,6 +51,36 @@ class SearchListingsInput(BaseModel):
 
 class ListingIdInput(BaseModel):
     listing_id: UUID = Field(description="ID inzerátu z výsledkov hľadania alebo z mojich inzerátov.")
+
+
+class CreateListingInput(BaseModel):
+    category: CategorySlug = Field(description="Kategória – vyber podľa obsahu požiadavky.")
+    title: str = Field(min_length=5, max_length=120, description="Krátky výstižný názov po slovensky.")
+    description: str = Field(
+        min_length=20, description="Popis po slovensky: čo treba urobiť, pre koho, čo má byť výsledkom."
+    )
+    budget_type: Literal["fixed", "hourly", "negotiable"] = Field("fixed", description="Typ rozpočtu.")
+    budget_amount: float | None = Field(None, gt=0, description="Suma v € (pri 'negotiable' vynechaj).")
+    city: str | None = Field(None, description="Mesto, ak ho používateľ uviedol.")
+    remote: bool = Field(True, description="Dá sa robiť na diaľku.")
+    skills: list[str] = Field(min_length=1, max_length=8, description="Potrebné zručnosti (1–8).")
+    level: Literal["beginner", "intermediate", "expert"] = Field("intermediate", description="Úroveň.")
+    size: Literal["small", "medium", "large"] = Field("small", description="Veľkosť práce.")
+    duration: str = Field("do 2 týždňov", description="Odhad trvania vlastnými slovami.")
+
+
+class SendOfferInput(BaseModel):
+    listing_id: UUID = Field(description="ID inzerátu z výsledkov hľadania.")
+    price: float = Field(gt=0, description="Cena ponuky v €.")
+    delivery_days: int = Field(ge=1, le=365, description="Za koľko dní prácu dodáš.")
+    message: str = Field(
+        min_length=20,
+        description="Správa zadávateľovi po slovensky: prečo práve ja, čo dodám, ako postupujem.",
+    )
+
+
+class OfferIdInput(BaseModel):
+    offer_id: UUID = Field(description="ID ponuky z get_offers_on_listing.")
 
 
 class MyListingInput(BaseModel):
@@ -111,7 +143,12 @@ class Tool:
     spec: ToolSpec
     input_model: type[BaseModel]
     handler: Callable[[Any], Any]
-    writes: bool = False  # zapisovacie nástroje budú vyžadovať potvrdenie človekom
+    # Zapisovacie nástroje: preview vyrobí text pre človeka, handler sa spustí až po potvrdení
+    preview: Callable[[Any], str] | None = None
+
+    @property
+    def writes(self) -> bool:
+        return self.preview is not None
 
 
 @dataclass(frozen=True)
@@ -119,6 +156,16 @@ class ToolOutcome:
     content: str  # JSON pre model
     is_error: bool
     data: Any  # pôvodný výsledok – pre výpis v CLI a vyhodnotenie
+    confirmed: bool | None = None  # pri zápise: súhlasil človek? (None = nástroj nič nezapisuje)
+
+
+# Otázka človeku: (názov nástroja, náhľad) → súhlas. CLI sa pýta y/n, vyhodnotenie odpovedá podľa scenára.
+type Confirm = Callable[[str, str], bool]
+
+DECLINED = {
+    "status": "declined",
+    "message": "Používateľ akciu nepotvrdil, nič sa nevykonalo. Neopakuj ju, kým o ňu znova nepožiada.",
+}
 
 
 def _schema(model: type[BaseModel]) -> dict[str, Any]:
@@ -141,8 +188,11 @@ class ToolRegistry:
     def get(self, name: str) -> Tool | None:
         return self._tools.get(name)
 
-    def execute(self, call: ToolCall) -> ToolOutcome:
-        """Overí argumenty a spustí nástroj. Chyby nezhodia agenta – vrátia sa modelu ako výsledok."""
+    def execute(self, call: ToolCall, confirm: Confirm | None = None) -> ToolOutcome:
+        """Overí argumenty a spustí nástroj. Chyby nezhodia agenta – vrátia sa modelu ako výsledok.
+
+        Zápis sa vykoná iba vtedy, keď `confirm` vráti True. Bez `confirm` sa zápis nevykoná nikdy.
+        """
         tool = self._tools.get(call.name)
         if tool is None:
             return _error({"error": "unknown_tool", "message": f"Nástroj '{call.name}' neexistuje."})
@@ -154,12 +204,19 @@ class ToolRegistry:
             )
             return _error({"error": "invalid_arguments", "message": problems})
         try:
+            if tool.preview is not None:
+                preview = tool.preview(arguments)  # môže čítať API (napr. názov inzerátu)
+                if confirm is None or not confirm(call.name, preview):
+                    return ToolOutcome(
+                        json.dumps(DECLINED, ensure_ascii=False), False, DECLINED, confirmed=False
+                    )
             data = tool.handler(arguments)
         except ApiError as error:
             return _error(error.to_result())
         except ToolError as error:
             return _error(error.data)
-        return ToolOutcome(json.dumps(data, ensure_ascii=False, default=str), False, data)
+        confirmed = True if tool.preview is not None else None
+        return ToolOutcome(json.dumps(data, ensure_ascii=False, default=str), False, data, confirmed)
 
 
 def _error(data: dict[str, Any]) -> ToolOutcome:
@@ -373,3 +430,159 @@ def _passes_filters(detail: dict[str, Any], args: SearchListingsInput) -> bool:
         if budget["type"] == "fixed" and budget["amount"] > args.max_budget:
             return False
     return True
+
+
+# --- Zapisovacie nástroje (každý s náhľadom pre potvrdenie človekom) ---
+
+
+def _find_my_offer(api: MarketplaceClient, offer_id: UUID) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Ponuka na niektorý z MOJICH inzerátov + ostatné ponuky na ten istý inzerát (pre náhľad prijatia)."""
+    for listing in api.get("/api/v1/listings/mine", pageSize=50)["items"]:
+        offers = api.get(f"/api/v1/listings/{listing['id']}/offers")
+        for offer in offers:
+            if offer["id"] == str(offer_id):
+                return offer, [o for o in offers if o["id"] != offer["id"]]
+    raise ToolError(
+        {
+            "error": "offer_not_found",
+            "message": "Takú ponuku na tvoje inzeráty nevidím. Najprv zavolaj get_offers_on_listing.",
+        }
+    )
+
+
+def build_write_tools(api: MarketplaceClient, web_base_url: str) -> list[Tool]:
+    def listing_url(listing_id: str) -> str:
+        return f"{web_base_url}/inzeraty/{listing_id}"
+
+    def _amount(args: CreateListingInput) -> str:
+        return _budget({"type": args.budget_type, "amount": args.budget_amount})
+
+    def preview_create_listing(args: CreateListingInput) -> str:
+        place = ", ".join(part for part in (args.city, "aj na diaľku" if args.remote else None) if part)
+        return "\n".join(
+            [
+                "Zverejniť nový inzerát:",
+                f"  Názov:      {args.title}",
+                f"  Kategória:  {args.category}",
+                f"  Rozpočet:   {_amount(args)}",
+                f"  Miesto:     {place or 'neuvedené'}",
+                f"  Zručnosti:  {', '.join(args.skills)}",
+                f"  Popis:      {_short(args.description, 300)}",
+            ]
+        )
+
+    def create_listing(args: CreateListingInput) -> dict[str, Any]:
+        created = api.post(
+            "/api/v1/listings",
+            {
+                "category": args.category,
+                "title": args.title,
+                "description": args.description,
+                "budget": {"type": args.budget_type, "amount": args.budget_amount},
+                "city": args.city,
+                "remote": args.remote,
+                "deadline": None,
+                "level": args.level,
+                "scope": {"size": args.size, "duration": args.duration},
+                "engagement": "one_time",
+                "invoiceRequired": False,
+                "skills": args.skills,
+                "deliverables": None,
+                "requirements": None,
+            },
+        )
+        return {
+            "status": "created",
+            "listing_id": created["id"],
+            "title": created["title"],
+            "url": listing_url(created["id"]),
+        }
+
+    def preview_send_offer(args: SendOfferInput) -> str:
+        listing = api.get(f"/api/v1/listings/{args.listing_id}")
+        owner = (listing.get("owner") or {}).get("displayName") or "neznámy zadávateľ"
+        budget = _budget(listing["budget"])
+        return "\n".join(
+            [
+                f"Poslať ponuku na inzerát „{listing['title']}“ ({owner}, rozpočet {budget}):",
+                f"  Cena:       {args.price:g} €",
+                f"  Dodanie:    {args.delivery_days} dní",
+                f"  Správa:     {_short(args.message, 400)}",
+            ]
+        )
+
+    def send_offer(args: SendOfferInput) -> dict[str, Any]:
+        offer = api.post(
+            f"/api/v1/listings/{args.listing_id}/offers",
+            {"price": args.price, "deliveryDays": args.delivery_days, "message": args.message},
+        )
+        return {"status": "sent", "offer_id": offer["id"], "url": listing_url(str(args.listing_id))}
+
+    def preview_accept_offer(args: OfferIdInput) -> str:
+        offer, others = _find_my_offer(api, args.offer_id)
+        pending = [o for o in others if o["status"] == "pending"]
+        name = (offer.get("freelancer") or {}).get("displayName") or "špecialista"
+        lines = [
+            f"Prijať ponuku na „{offer.get('listingTitle')}“:",
+            f"  Od:         {name}",
+            f"  Cena:       {offer['price']:g} €, dodanie {offer['deliveryDays']} dní",
+            "  Inzerát prejde do stavu „v realizácii“.",
+        ]
+        if pending:
+            lines.append(f"  Ostatné čakajúce ponuky ({len(pending)}) budú automaticky odmietnuté.")
+        lines.append("  Prijatie sa nedá vrátiť späť.")
+        return "\n".join(lines)
+
+    def accept_offer(args: OfferIdInput) -> dict[str, Any]:
+        offer = api.post(f"/api/v1/offers/{args.offer_id}/accept")
+        return {"status": "accepted", "offer": _offer(offer), "url": listing_url(offer["listingId"])}
+
+    def preview_reject_offer(args: OfferIdInput) -> str:
+        offer, _ = _find_my_offer(api, args.offer_id)
+        name = (offer.get("freelancer") or {}).get("displayName") or "špecialista"
+        return f"Odmietnuť ponuku od {name} ({offer['price']:g} €) na „{offer.get('listingTitle')}“."
+
+    def reject_offer(args: OfferIdInput) -> dict[str, Any]:
+        offer = api.post(f"/api/v1/offers/{args.offer_id}/reject")
+        return {"status": "rejected", "offer": _offer(offer)}
+
+    def tool(
+        name: str,
+        description: str,
+        model: type[BaseModel],
+        handler: Callable[[Any], Any],
+        preview: Callable[[Any], str],
+    ) -> Tool:
+        return Tool(ToolSpec(name, description, _schema(model)), model, handler, preview)
+
+    confirm_note = " Používateľ akciu pred vykonaním potvrdí – zavolaj nástroj rovno, nepýtaj sa vopred."
+    return [
+        tool(
+            "create_listing",
+            "Zverejní nový inzerát prihláseného používateľa (zadávateľa)." + confirm_note,
+            CreateListingInput,
+            create_listing,
+            preview_create_listing,
+        ),
+        tool(
+            "send_offer",
+            "Pošle ponuku špecialistu na otvorený inzerát." + confirm_note,
+            SendOfferInput,
+            send_offer,
+            preview_send_offer,
+        ),
+        tool(
+            "accept_offer",
+            "Prijme ponuku na môj inzerát; ostatné čakajúce ponuky sa odmietnu." + confirm_note,
+            OfferIdInput,
+            accept_offer,
+            preview_accept_offer,
+        ),
+        tool(
+            "reject_offer",
+            "Odmietne ponuku na môj inzerát." + confirm_note,
+            OfferIdInput,
+            reject_offer,
+            preview_reject_offer,
+        ),
+    ]

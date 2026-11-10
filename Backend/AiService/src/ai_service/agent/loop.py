@@ -19,7 +19,7 @@ from ai_service.agent.llm import (
     Usage,
     UserMessage,
 )
-from ai_service.agent.tools import ToolOutcome, ToolRegistry
+from ai_service.agent.tools import Confirm, ToolOutcome, ToolRegistry
 
 STEP_LIMIT_MESSAGE = (
     "Dosiahol som limit krokov pre jednu požiadavku a zastavil som sa, aby som nerobil nič neočakávané. "
@@ -56,6 +56,7 @@ class Agent:
         system: str,
         max_steps: int = 8,
         on_event: EventHandler | None = None,
+        confirm: Confirm | None = None,
     ) -> None:
         self.provider = provider
         self.tools = tools
@@ -63,6 +64,8 @@ class Agent:
         self.max_steps = max_steps
         self.history: list[Message] = []  # celá konverzácia – agent si pamätá predchádzajúce otázky
         self._on_event = on_event or (lambda _kind, _payload: None)
+        # Bez potvrdzovacej funkcie sa žiadny zápis nevykoná – bezpečné predvolené správanie
+        self._confirm = confirm
 
     def ask(self, text: str) -> AgentReply:
         started = time.perf_counter()
@@ -90,7 +93,7 @@ class Agent:
             for call in message.tool_calls:
                 self._on_event("tool_call", call)
                 step_started = time.perf_counter()
-                outcome = self.tools.execute(call)
+                outcome = self.tools.execute(call, self._confirm)
                 step = ToolStep(call, outcome, time.perf_counter() - step_started)
                 reply.tool_steps.append(step)
                 self._on_event("tool_result", step)

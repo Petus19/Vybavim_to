@@ -96,3 +96,35 @@ def test_remembers_conversation_between_requests() -> None:
     bot.ask("ten s logom")
 
     assert len(provider.seen[-1]) == 3  # otázka, odpoveď, nová otázka
+
+
+def test_write_tool_runs_only_after_human_confirms() -> None:
+    written: list[str] = []
+
+    def write(args: EchoInput) -> dict[str, str]:
+        written.append(args.text)
+        return {"status": "created"}
+
+    tools = ToolRegistry(
+        [
+            Tool(
+                ToolSpec("write", "Zapíše.", EchoInput.model_json_schema()),
+                EchoInput,
+                write,
+                lambda a: a.text,
+            )
+        ]
+    )
+    previews: list[str] = []
+
+    def human_says_no(_name: str, preview: str) -> bool:
+        previews.append(preview)
+        return False
+
+    provider = ScriptedProvider([call("write", text="nový inzerát"), answer("Nič som nevytvoril.")])
+    reply = Agent(provider, tools, "system", confirm=human_says_no).ask("vytvor inzerát")
+
+    assert written == []  # model chcel zapisovať, človek nepotvrdil → nič
+    assert previews == ["nový inzerát"]
+    assert reply.tool_steps[0].outcome.confirmed is False
+    assert json.loads(tool_results(provider)[0].content)["status"] == "declined"

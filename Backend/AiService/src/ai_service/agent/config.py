@@ -24,6 +24,7 @@ class AgentSettings(BaseSettings):
     # Systémy, ktoré agent volá – iba cez HTTP
     api_base_url: str = "http://127.0.0.1:5080"
     ai_service_url: str = "http://127.0.0.1:8000"
+    web_base_url: str = "http://localhost:3000"  # odkazy na vytvorený inzerát / ponuku v odpovedi agenta
 
     # Bezpečnostné limity
     max_steps: int = 8  # najviac toľko volaní modelu na jednu požiadavku používateľa
