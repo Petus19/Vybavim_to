@@ -34,12 +34,13 @@ def test_dataset_is_balanced_across_categories() -> None:
 def test_evaluate_reports_metrics_per_kind_and_misses() -> None:
     dataset = load_dataset()
 
-    result = evaluate(KeywordRetriever(dataset.listings), dataset.answerable)
+    result = evaluate(KeywordRetriever(dataset.listings), dataset)
 
     assert 0 <= result.recall_at_k <= 1
     assert 0 <= result.mrr <= 1
     assert result.recall_by_kind["synonym"] == 0  # kľúčové slovo nenájde synonymum – preto to celé robíme
     assert "q08" in result.misses
+    assert result.no_answer_empty == 1.0  # na „daňové priznanie“ nič nenájde – a to je správne
     assert "| keyword (current C# API) |" in results_table([result])
 
 

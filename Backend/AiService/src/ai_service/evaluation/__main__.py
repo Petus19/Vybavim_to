@@ -12,6 +12,7 @@ from ai_service.evaluation.retrievers import (
     KeywordRetriever,
     Retriever,
     SemanticRetriever,
+    ServedHybridRetriever,
 )
 from ai_service.evaluation.run import K, evaluate, results_table, threshold_analysis, threshold_table
 
@@ -31,7 +32,8 @@ def main() -> None:
         help="embedding model to evaluate (can be repeated); default = the service's model",
     )
     args = parser.parse_args()
-    models = args.model or [get_settings().embedding_model]
+    settings = get_settings()
+    models = args.model or [settings.embedding_model]
 
     dataset = load_dataset()
     queries = dataset.answerable
@@ -41,7 +43,9 @@ def main() -> None:
 
     hybrids = [HybridRetriever(bm25, s) for s in semantics]
     retrievers: list[Retriever] = [keyword, bm25, *semantics, *hybrids]
-    results = [evaluate(r, queries) for r in retrievers]
+    if models[0] == settings.embedding_model:  # minimálne skóre je nastavené pre model služby
+        retrievers.append(ServedHybridRetriever(bm25, semantics[0], settings.min_score))
+    results = [evaluate(r, dataset) for r in retrievers]
 
     print(f"{len(dataset.listings)} listings, {len(queries)} answerable queries", end="")
     print(f" + {len(dataset.queries) - len(queries)} with no correct answer\n")

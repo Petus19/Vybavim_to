@@ -1,15 +1,14 @@
-"""Štyri spôsoby hľadania, ktoré porovnávame. Každý dostane dopyt a vráti zoradené (kľúč, skóre).
+"""Spôsoby hľadania, ktoré porovnávame. Každý dostane dopyt a vráti zoradené (kľúč, skóre).
 
 - KeywordRetriever  – to, čo dnes robí C# API (baseline)
 - Bm25Retriever     – klasické fulltextové hľadanie, silnejší „súper“
 - SemanticRetriever – embedding model (krok 2)
-- HybridRetriever   – spojenie BM25 a sémantiky (Reciprocal Rank Fusion)
+- HybridRetriever   – spojenie BM25 a sémantiky (Reciprocal Rank Fusion), bez filtra
+- ServedHybridRetriever – presne to, čo vracia endpoint /search: hybrid + minimálne skóre
+
+BM25, RRF aj filter sú importované z produkčného kódu (text_search, hybrid) – meriame to, čo beží.
 """
 
-import math
-import re
-import unicodedata
-from collections import Counter
 from collections.abc import Sequence
 from typing import Protocol
 
@@ -17,6 +16,8 @@ import numpy as np
 
 from ai_service.embeddings import Embedder
 from ai_service.evaluation.dataset import EvalListing
+from ai_service.hybrid import fuse
+from ai_service.text_search import Bm25Index, normalize, reciprocal_rank_fusion
 
 type Ranking = list[tuple[str, float]]  # [(kľúč inzerátu, skóre)], najlepší prvý
 
@@ -25,15 +26,6 @@ class Retriever(Protocol):
     name: str
 
     def rank(self, query: str) -> Ranking: ...
-
-
-def normalize(text: str) -> str:
-    """Bez diakritiky a malými písmenami – obdoba unaccent() + ILIKE v PostgreSQL.
-
-    NFKD rozloží „č“ na „c“ + samostatný háčik; háčiky a dĺžne (kombinujúce znaky) potom zahodíme.
-    """
-    decomposed = unicodedata.normalize("NFKD", text)
-    return "".join(ch for ch in decomposed if not unicodedata.combining(ch)).casefold()
 
 
 def keyword_text(listing: EvalListing) -> str:
@@ -58,54 +50,15 @@ class KeywordRetriever:
         return [(key, 1.0) for key, text in self._texts if needle in text]
 
 
-def tokenize(text: str, prefix_length: int) -> list[str]:
-    """Slová bez diakritiky, skrátené na prvých `prefix_length` znakov.
-
-    Skracovanie je najjednoduchší „stemming“ pre slovenčinu: „kaviareň“, „kaviarne“, „kaviarni“
-    → všetko „kavia“. Bez neho by BM25 nespojil rôzne pády toho istého slova.
-    """
-    return [word[:prefix_length] for word in re.findall(r"\w+", normalize(text))]
-
-
 class Bm25Retriever:
-    """BM25 – predvolený spôsob radenia v Lucene, Elasticsearch a OpenSearch.
-
-    Skóre slova je vyššie, keď je v inzeráte častejšie (tf), ale so stropom (k1), keď je vzácne
-    v celej sade (idf) a keď je inzerát kratší (b). Skóre dopytu = súčet cez jeho slová.
-    """
-
     name = "BM25"
 
-    def __init__(
-        self, listings: Sequence[EvalListing], k1: float = 1.5, b: float = 0.75, prefix_length: int = 5
-    ) -> None:
-        self._k1, self._b, self._prefix_length = k1, b, prefix_length
-        self._keys = [listing.key for listing in listings]
-        self._term_counts = [
-            Counter(tokenize(f"{keyword_text(listing)} {listing.document.category}", prefix_length))
-            for listing in listings
-        ]
-        self._lengths = [sum(counts.values()) for counts in self._term_counts]
-        self._average_length = sum(self._lengths) / len(self._lengths)
-        document_frequency = Counter(term for counts in self._term_counts for term in counts)
-        n = len(listings)
-        self._idf = {
-            term: math.log((n - df + 0.5) / (df + 0.5) + 1) for term, df in document_frequency.items()
-        }
+    def __init__(self, listings: Sequence[EvalListing]) -> None:
+        # Rovnaký text ako v službe (ListingDocument.search_text)
+        self.index = Bm25Index([(listing.key, listing.document.search_text()) for listing in listings])
 
     def rank(self, query: str) -> Ranking:
-        terms = tokenize(query, self._prefix_length)
-        scored = []
-        for key, counts, length in zip(self._keys, self._term_counts, self._lengths, strict=True):
-            score = 0.0
-            for term in terms:
-                tf = counts.get(term, 0)
-                if tf:
-                    norm = self._k1 * (1 - self._b + self._b * length / self._average_length)
-                    score += self._idf[term] * tf * (self._k1 + 1) / (tf + norm)
-            if score > 0:
-                scored.append((key, score))
-        return sorted(scored, key=lambda item: -item[1])  # sorted je stabilný – zhody ostanú v poradí sady
+        return [(hit.key, hit.score) for hit in self.index.rank(query)]
 
 
 class SemanticRetriever:
@@ -134,23 +87,24 @@ class SemanticRetriever:
         return [(self._keys[i], float(scores[i])) for i in order]
 
 
-def reciprocal_rank_fusion(rankings: Sequence[Ranking], k: int = 60) -> Ranking:
-    """Spojí viac poradí do jedného: každý zoznam dá inzerátu 1 / (k + poradie), body sa sčítajú.
-
-    Používa iba POZÍCIE, nie skóre – preto sa dajú spojiť aj metódy s úplne inými škálami
-    (BM25 dáva 0–15, kosínus 0–1). k = 60 je hodnota z pôvodného článku (Cormack a kol., 2009).
-    """
-    fused: dict[str, float] = {}
-    for ranking in rankings:
-        for position, (key, _) in enumerate(ranking, start=1):
-            fused[key] = fused.get(key, 0.0) + 1 / (k + position)
-    return sorted(fused.items(), key=lambda item: -item[1])
-
-
 class HybridRetriever:
+    """RRF spojenie ľubovoľných metód, bez filtra – ukazuje strop, ktorý hybrid dosiahne."""
+
     def __init__(self, *retrievers: Retriever) -> None:
         self._retrievers = retrievers
         self.name = "hybrid: " + " + ".join(r.name for r in retrievers)
 
     def rank(self, query: str) -> Ranking:
-        return reciprocal_rank_fusion([r.rank(query) for r in self._retrievers])
+        return reciprocal_rank_fusion([[key for key, _ in r.rank(query)] for r in self._retrievers])
+
+
+class ServedHybridRetriever:
+    """To isté, čo endpoint /search: BM25 + sémantika cez RRF a filter minimálneho skóre (hybrid.fuse)."""
+
+    def __init__(self, bm25: Bm25Retriever, semantic: SemanticRetriever, min_score: float) -> None:
+        self._bm25, self._semantic, self._min_score = bm25, semantic, min_score
+        self.name = f"hybrid as served (min. score {min_score})"
+
+    def rank(self, query: str) -> Ranking:
+        results = fuse(self._semantic.rank(query), self._bm25.index.rank(query), self._min_score)
+        return [(r.key, r.semantic_score or 0.0) for r in results]

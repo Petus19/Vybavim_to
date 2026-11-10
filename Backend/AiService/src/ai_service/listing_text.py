@@ -7,6 +7,10 @@ import hashlib
 from dataclasses import dataclass
 from uuid import UUID
 
+# Zvýš, keď sa zmení, čo sa o inzeráte ukladá (napr. pribudol text pre BM25) – zmení sa tým odtlačok
+# každého inzerátu a najbližšie /index všetko jednorazovo prepočíta.
+INDEX_FORMAT_VERSION = 2
+
 
 @dataclass(frozen=True)
 class ListingDocument:
@@ -27,6 +31,11 @@ class ListingDocument:
         skills = ", ".join(self.skills)
         return f"{self.title}. Kategória: {self.category}. {self.description} Zručnosti: {skills}"
 
+    def search_text(self) -> str:
+        """Text pre hľadanie podľa slov (BM25): rovnaké polia, bez pomocných slov „Kategória:“."""
+        return f"{self.title} {self.description} {' '.join(self.skills)} {self.category}"
+
     def content_hash(self, model_name: str) -> str:
-        """Odtlačok textu a modelu. Keď sa nezmení ani jedno, vektor netreba počítať znova."""
-        return hashlib.sha256(f"{model_name}\n{self.text()}".encode()).hexdigest()
+        """Odtlačok textu, modelu a formátu indexu. Keď sa nič nezmení, vektor netreba počítať znova."""
+        payload = f"v{INDEX_FORMAT_VERSION}\n{model_name}\n{self.text()}"
+        return hashlib.sha256(payload.encode()).hexdigest()

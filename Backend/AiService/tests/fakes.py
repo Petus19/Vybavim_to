@@ -11,7 +11,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from ai_service.listing_text import ListingDocument
-from ai_service.repository import Hit, StoredEmbedding
+from ai_service.repository import Hit, KeywordDocument, StoredEmbedding
 
 # Každá „téma“ má vlastný rozmer vektora: text o logu má veľké číslo na pozícii 0, o sieti na pozícii 1…
 TOPICS = [
@@ -49,6 +49,9 @@ class InMemoryRepository:
 
     def content_hashes(self) -> dict[UUID, str]:
         return {listing_id: row.content_hash for listing_id, row in self.rows.items()}
+
+    def keyword_documents(self) -> list[KeywordDocument]:
+        return [KeywordDocument(r.listing_id, r.title, r.status, r.search_text) for r in self.rows.values()]
 
     def upsert(self, rows: Sequence[StoredEmbedding], model_name: str) -> None:
         for row in rows:

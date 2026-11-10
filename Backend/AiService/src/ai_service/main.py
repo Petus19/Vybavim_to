@@ -2,7 +2,7 @@
 
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Annotated
 from uuid import UUID
 
@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from ai_service import __version__
 from ai_service.config import Settings, get_settings
 from ai_service.embeddings import Embedder, SentenceTransformerEmbedder
+from ai_service.hybrid import DEFAULT_MIN_SCORE, HybridHit, HybridSearch
 from ai_service.indexer import IndexResult, reindex
 from ai_service.listings_client import ApiListingsSource, ListingsSource
 from ai_service.repository import EmbeddingRepository, Hit, PostgresEmbeddingRepository
@@ -24,6 +25,11 @@ class Services:
     embedder: Embedder
     repository: EmbeddingRepository
     listings: ListingsSource
+    min_score: float = DEFAULT_MIN_SCORE
+    search: HybridSearch = field(init=False)  # skladá sa z embedderu a úložiska
+
+    def __post_init__(self) -> None:
+        self.search = HybridSearch(self.embedder, self.repository)
 
 
 def build_services(settings: Settings) -> Services:
@@ -33,6 +39,7 @@ def build_services(settings: Settings) -> Services:
         embedder=embedder,
         repository=PostgresEmbeddingRepository(settings.database_url, embedder.dimension),
         listings=ApiListingsSource(settings.api_base_url),
+        min_score=settings.min_score,
     )
 
 
@@ -58,15 +65,34 @@ class IndexResponse(BaseModel):
     removed: int
 
 
-class SearchHit(BaseModel):
+class SimilarHit(BaseModel):
     listing_id: UUID
     title: str
     status: str
     score: float  # kosínusová podobnosť, 1 = rovnaký význam
 
     @classmethod
-    def from_hit(cls, hit: Hit) -> "SearchHit":
+    def from_hit(cls, hit: Hit) -> "SimilarHit":
         return cls(listing_id=hit.listing_id, title=hit.title, status=hit.status, score=round(hit.score, 4))
+
+
+class SearchHit(BaseModel):
+    listing_id: UUID
+    title: str
+    status: str
+    score: float | None  # kosínusová podobnosť; None = nájdené iba podľa slov
+    keyword_match: bool  # inzerát obsahuje všetky hľadané slová
+
+    @classmethod
+    def from_hit(cls, hit: HybridHit) -> "SearchHit":
+        score = None if hit.semantic_score is None else round(hit.semantic_score, 4)
+        return cls(
+            listing_id=hit.listing_id,
+            title=hit.title,
+            status=hit.status,
+            score=score,
+            keyword_match=hit.keyword_match,
+        )
 
 
 def create_app(services_factory: Callable[[Settings], Services] = build_services) -> FastAPI:
@@ -77,6 +103,7 @@ def create_app(services_factory: Callable[[Settings], Services] = build_services
         # Raz pri štarte: načítaj model do pamäte (pár sekúnd) a priprav tabuľku v databáze.
         services = services_factory(get_settings())
         services.repository.ensure_schema()
+        services.search.refresh()  # BM25 index z textov, ktoré už sú v databáze
         app.state.services = services
         yield
 
@@ -94,17 +121,25 @@ def create_app(services_factory: Callable[[Settings], Services] = build_services
     @app.post("/index", tags=["Semantic search"], summary="(Re)index all public listings from the main API")
     def index(services: ServicesDep) -> IndexResponse:
         result: IndexResult = reindex(services.listings, services.embedder, services.repository)
+        services.search.refresh()
         return IndexResponse(indexed=result.indexed, unchanged=result.unchanged, removed=result.removed)
 
-    @app.get("/search", tags=["Semantic search"], summary="Find listings by meaning, not exact words")
+    @app.get(
+        "/search",
+        tags=["Semantic search"],
+        summary="Hybrid search: meaning (embeddings) + words (BM25); empty list = nothing relevant",
+    )
     def search(
         services: ServicesDep,
         q: Annotated[str, Query(min_length=2, max_length=500, description="What the user is looking for")],
         limit: Annotated[int, Query(ge=1, le=50)] = 10,
+        min_score: Annotated[
+            float | None,
+            Query(ge=0, le=1, description="Minimum cosine similarity; default from settings (0.45)"),
+        ] = None,
     ) -> list[SearchHit]:
-        # Dopyt prejde tým istým modelom ako inzeráty – inak by vektory neboli porovnateľné
-        query_vector = services.embedder.embed([q])[0]
-        return [SearchHit.from_hit(h) for h in services.repository.search(query_vector, limit)]
+        threshold = services.min_score if min_score is None else min_score
+        return [SearchHit.from_hit(h) for h in services.search.search(q, limit, threshold)]
 
     @app.get(
         "/listings/{listing_id}/similar",
@@ -116,11 +151,11 @@ def create_app(services_factory: Callable[[Settings], Services] = build_services
         services: ServicesDep,
         listing_id: UUID,
         limit: Annotated[int, Query(ge=1, le=20)] = 5,
-    ) -> list[SearchHit]:
+    ) -> list[SimilarHit]:
         hits = services.repository.similar(listing_id, limit)
         if hits is None:
             raise HTTPException(status_code=404, detail="Listing is not indexed.")
-        return [SearchHit.from_hit(h) for h in hits]
+        return [SimilarHit.from_hit(h) for h in hits]
 
     return app
 

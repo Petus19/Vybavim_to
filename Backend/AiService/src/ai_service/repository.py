@@ -25,6 +25,17 @@ class StoredEmbedding:
     status: str
     content_hash: str
     embedding: NDArray[np.float32]
+    search_text: str  # text pre BM25 (hľadanie podľa slov)
+
+
+@dataclass(frozen=True)
+class KeywordDocument:
+    """Čo potrebuje BM25 index: ID, text a údaje na zobrazenie výsledku."""
+
+    listing_id: UUID
+    title: str
+    status: str
+    search_text: str
 
 
 @dataclass(frozen=True)
@@ -42,6 +53,7 @@ class EmbeddingRepository(Protocol):
 
     def ensure_schema(self) -> None: ...
     def content_hashes(self) -> dict[UUID, str]: ...
+    def keyword_documents(self) -> list[KeywordDocument]: ...
     def upsert(self, rows: Sequence[StoredEmbedding], model_name: str) -> None: ...
     def delete_except(self, keep: set[UUID]) -> int: ...
     def search(self, query: NDArray[np.float32], limit: int) -> list[Hit]: ...
@@ -80,6 +92,12 @@ class PostgresEmbeddingRepository:
                     """
                 ).format(dimension=sql.Literal(self._dimension))
             )
+            # Stĺpec pribudol neskôr (hybridné hľadanie) – ALTER pre databázy vytvorené pred ním.
+            # Staré riadky majú prázdny text, ale zmenený formát odtlačku ich pri /index prepočíta.
+            conn.execute(
+                "ALTER TABLE ai.listing_embeddings "
+                "ADD COLUMN IF NOT EXISTS search_text text NOT NULL DEFAULT ''"
+            )
             # HNSW = graf „susedov“, vďaka ktorému sa najbližšie vektory nájdu bez porovnania so všetkými.
             # vector_cosine_ops: index počíta s kosínusovou vzdialenosťou (operátor <=>).
             conn.execute(
@@ -92,6 +110,13 @@ class PostgresEmbeddingRepository:
             rows = conn.execute("SELECT listing_id, content_hash FROM ai.listing_embeddings").fetchall()
         return {listing_id: content_hash for listing_id, content_hash in rows}
 
+    def keyword_documents(self) -> list[KeywordDocument]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT listing_id, title, status, search_text FROM ai.listing_embeddings ORDER BY indexed_at"
+            ).fetchall()
+        return [KeywordDocument(*row) for row in rows]
+
     def upsert(self, rows: Sequence[StoredEmbedding], model_name: str) -> None:
         """Vloží nové riadky, existujúce prepíše (INSERT … ON CONFLICT DO UPDATE)."""
         if not rows:
@@ -99,13 +124,18 @@ class PostgresEmbeddingRepository:
         with self._connect() as conn, conn.cursor() as cur:
             cur.executemany(
                 """
-                INSERT INTO ai.listing_embeddings (listing_id, title, status, model, content_hash, embedding)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                INSERT INTO ai.listing_embeddings
+                    (listing_id, title, status, model, content_hash, embedding, search_text)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (listing_id) DO UPDATE SET
                     title = EXCLUDED.title, status = EXCLUDED.status, model = EXCLUDED.model,
-                    content_hash = EXCLUDED.content_hash, embedding = EXCLUDED.embedding, indexed_at = now()
+                    content_hash = EXCLUDED.content_hash, embedding = EXCLUDED.embedding,
+                    search_text = EXCLUDED.search_text, indexed_at = now()
                 """,
-                [(r.listing_id, r.title, r.status, model_name, r.content_hash, r.embedding) for r in rows],
+                [
+                    (r.listing_id, r.title, r.status, model_name, r.content_hash, r.embedding, r.search_text)
+                    for r in rows
+                ],
             )
 
     def delete_except(self, keep: set[UUID]) -> int:

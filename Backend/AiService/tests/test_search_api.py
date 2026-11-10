@@ -64,24 +64,59 @@ def test_index_reembeds_changed_listing(api: Fixture) -> None:
 def test_search_returns_most_similar_first(api: Fixture) -> None:
     api.client.post("/index")
 
-    response = api.client.get("/search", params={"q": "potrebujem znak pre firmu od grafika"})
+    response = api.client.get("/search", params={"q": "potrebujem znak pre firmu od grafika", "min_score": 0})
     hits = response.json()
 
     assert response.status_code == 200
     assert hits[0]["listing_id"] == str(LOGO.id)
     assert hits[0]["score"] > hits[1]["score"]
-    assert set(hits[0]) == {"listing_id", "title", "status", "score"}
+    assert set(hits[0]) == {"listing_id", "title", "status", "score", "keyword_match"}
+
+
+def test_search_hides_results_below_min_score(api: Fixture) -> None:
+    api.client.post("/index")
+
+    response = api.client.get("/search", params={"q": "potrebujem znak pre firmu od grafika"})
+
+    assert [hit["listing_id"] for hit in response.json()] == [str(LOGO.id)]
+
+
+def test_search_returns_empty_list_when_nothing_is_relevant(api: Fixture) -> None:
+    api.client.post("/index")
+
+    response = api.client.get("/search", params={"q": "upratovanie kancelárie"})
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_search_finds_exact_words_even_with_low_similarity(api: Fixture) -> None:
+    api.client.post("/index")
+
+    # Falošný model nepozná slovo „kozmetika“ (nízke skóre), ale BM25 nájde všetky slová dopytu
+    hits = api.client.get("/search", params={"q": "kozmetikou"}).json()
+
+    assert [hit["listing_id"] for hit in hits] == [str(ESHOP.id)]
+    assert hits[0]["keyword_match"] is True
+    assert hits[0]["score"] < 0.41
+
+
+def test_search_before_indexing_returns_nothing(api: Fixture) -> None:
+    assert api.client.get("/search", params={"q": "logo"}).json() == []
 
 
 def test_search_respects_limit(api: Fixture) -> None:
     api.client.post("/index")
 
-    response = api.client.get("/search", params={"q": "wifi", "limit": 1})
+    response = api.client.get("/search", params={"q": "wifi", "limit": 1, "min_score": 0})
 
     assert len(response.json()) == 1
 
 
-@pytest.mark.parametrize("params", [{"q": "a"}, {"q": "logo", "limit": 0}, {"q": "logo", "limit": 51}, {}])
+@pytest.mark.parametrize(
+    "params",
+    [{"q": "a"}, {"q": "logo", "limit": 0}, {"q": "logo", "limit": 51}, {"q": "logo", "min_score": 2}, {}],
+)
 def test_search_invalid_query_returns_422(api: Fixture, params: dict[str, object]) -> None:
     response = api.client.get("/search", params=params)
 
