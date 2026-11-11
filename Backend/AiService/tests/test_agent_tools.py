@@ -126,3 +126,18 @@ def test_offers_without_listing_returns_all_received_offers(api: FakeApi) -> Non
     assert not is_error
     assert [group["listing_title"] for group in data["listings"]] == ["Redizajn starého loga autoservisu"]
     assert data["listings"][0]["offers"][0]["specialist"] == "Lucia Bartošová"
+
+
+def test_cancelled_listing_is_ignored_when_resolving_by_title(api: FakeApi) -> None:
+    cancelled = {
+        "id": "x",
+        "title": "Logo pre kaviareň",
+        "status": "cancelled",
+        "budget": {"type": "negotiable"},
+    }
+    api.routes["/api/v1/listings/mine"] = {"items": [*MINE["items"], cancelled]}
+
+    data, is_error = run(api, "get_offers_on_listing", listing="logo")
+
+    assert not is_error
+    assert data["listing_title"] == "Redizajn starého loga autoservisu"  # nie „nejednoznačné“

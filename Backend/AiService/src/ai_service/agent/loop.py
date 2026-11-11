@@ -79,10 +79,7 @@ class Agent:
                 reply.text, reply.stop_reason = f"Model teraz neodpovedá ({error}).", "llm_error"
                 break
             reply.llm_calls += 1
-            reply.usage = Usage(
-                reply.usage.input_tokens + completion.usage.input_tokens,
-                reply.usage.output_tokens + completion.usage.output_tokens,
-            )
+            reply.usage = reply.usage + completion.usage
             message = completion.message
             self.history.append(message)
 

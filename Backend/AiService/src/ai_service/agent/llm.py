@@ -50,8 +50,22 @@ type Message = UserMessage | AssistantMessage | ToolResultMessage
 
 @dataclass(frozen=True)
 class Usage:
-    input_tokens: int = 0
+    input_tokens: int = 0  # nové vstupné tokeny (plná cena)
     output_tokens: int = 0
+    cache_read_tokens: int = 0  # vstup prečítaný z cache poskytovateľa (zlomok ceny)
+    cache_write_tokens: int = 0  # vstup zapísaný do cache
+
+    @property
+    def total_input_tokens(self) -> int:
+        return self.input_tokens + self.cache_read_tokens + self.cache_write_tokens
+
+    def __add__(self, other: "Usage") -> "Usage":
+        return Usage(
+            self.input_tokens + other.input_tokens,
+            self.output_tokens + other.output_tokens,
+            self.cache_read_tokens + other.cache_read_tokens,
+            self.cache_write_tokens + other.cache_write_tokens,
+        )
 
 
 @dataclass(frozen=True)

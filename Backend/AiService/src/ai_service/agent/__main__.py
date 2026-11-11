@@ -15,6 +15,7 @@ from ai_service.agent.config import AgentSettings
 from ai_service.agent.llm import LLMError, ToolCall
 from ai_service.agent.loop import Agent, AgentReply, ToolStep
 from ai_service.agent.marketplace import ApiError, MarketplaceClient, SearchClient
+from ai_service.agent.pricing import estimate_cost
 from ai_service.agent.prompts import Role, system_prompt
 from ai_service.agent.providers import create_provider
 from ai_service.agent.tools import ToolRegistry, build_read_tools, build_write_tools
@@ -88,10 +89,12 @@ def confirm(tool_name: str, preview: str) -> bool:
     return approved
 
 
-def _stats(reply: AgentReply) -> str:
-    tokens = f"{reply.usage.input_tokens} + {reply.usage.output_tokens} tokenov"
+def _stats(reply: AgentReply, provider_name: str) -> str:
+    tokens = f"{reply.usage.total_input_tokens} + {reply.usage.output_tokens} tokenov"
     steps = f"{reply.llm_calls} volaní modelu · {len(reply.tool_steps)} nástrojov"
-    return f"{steps} · {tokens} · {reply.seconds:.1f} s"
+    cost = estimate_cost(provider_name, reply.usage)
+    price = f" · ~${cost:.4f}" if cost else ""  # lokálny model je zadarmo, cenu neukazujeme
+    return f"{steps} · {tokens}{price} · {reply.seconds:.1f} s"
 
 
 def main() -> None:
@@ -140,7 +143,7 @@ def main() -> None:
             break
         reply = agent.ask(text)
         print(f"\n{BOLD}Agent:{RESET} {reply.text}")
-        print(f"{DIM}({_stats(reply)}){RESET}\n")
+        print(f"{DIM}({_stats(reply, provider.name)}){RESET}\n")
 
 
 if __name__ == "__main__":

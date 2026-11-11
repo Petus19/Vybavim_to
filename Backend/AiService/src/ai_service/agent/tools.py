@@ -257,14 +257,18 @@ def resolve_my_listing(api: MarketplaceClient, reference: str) -> dict[str, Any]
         matches = [item for item in mine if item["id"] == wanted_id]
     else:
         # Rovnaké delenie na slová ako BM25: bez diakritiky, „loga“ = „logo“
+        # Stiahnuté inzeráty sa podľa názvu nehľadajú – ponuky na ne už nikto neposiela a iba by mýlili
         wanted = set(terms(reference))
-        scored = [(len(wanted & set(terms(item["title"]))), item) for item in mine]
+        active = [item for item in mine if item.get("status") != "cancelled"]
+        scored = [(len(wanted & set(terms(item["title"]))), item) for item in active]
         best = max((score for score, _ in scored), default=0)
         matches = [item for score, item in scored if score == best and score > 0]
 
     if len(matches) == 1:
         return matches[0]
-    titles = [{"id": item["id"], "title": item["title"]} for item in mine]
+    titles = [
+        {"id": item["id"], "title": item["title"]} for item in mine if item.get("status") != "cancelled"
+    ]
     if not matches:
         raise ToolError(
             {

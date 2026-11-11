@@ -6,6 +6,7 @@ API kľúč (ANTHROPIC_API_KEY) číta priamo SDK z prostredia – v kóde ani v
 
 from typing import Literal
 
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,6 +21,13 @@ class AgentSettings(BaseSettings):
 
     # Hostovaný model cez oficiálny Anthropic SDK
     anthropic_model: str = "claude-opus-5-5"
+    # Hĺbka premýšľania modelu: low | medium | high | xhigh | max (viac = pomalšie a drahšie)
+    anthropic_effort: Literal["low", "medium", "high", "xhigh", "max"] = "medium"
+    # Pri odmietnutí odpovede bezpečnostným klasifikátorom nech API skúsi záložný model
+    anthropic_fallbacks: bool = True
+    # Kľúč z .env alebo z prostredia (bez predpony AGENT_). SecretStr ho nevypíše ani v logu či chybe.
+    # Keď chýba, SDK si prihlásenie nájde samo (napr. profil z `ant auth login`).
+    anthropic_api_key: SecretStr | None = Field(default=None, validation_alias="ANTHROPIC_API_KEY")
 
     # Systémy, ktoré agent volá – iba cez HTTP
     api_base_url: str = "http://127.0.0.1:5080"
