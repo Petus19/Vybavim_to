@@ -3,7 +3,7 @@
 import { useTransition } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { ClipboardList, LogOut } from "lucide-react";
+import { ClipboardList, LogOut, Send } from "lucide-react";
 import { logout } from "@/app/prihlasenie/actions";
 import {
   DropdownMenu,
@@ -62,6 +62,10 @@ export function AccountMenu({ email }: { email: string }) {
         <DropdownMenuItem render={<Link href="/moje-inzeraty" />} className="rounded-xl px-2 py-2">
           <ClipboardList aria-hidden="true" />
           Moje inzeráty
+        </DropdownMenuItem>
+        <DropdownMenuItem render={<Link href="/moje-ponuky" />} className="rounded-xl px-2 py-2">
+          <Send aria-hidden="true" />
+          Moje ponuky
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem

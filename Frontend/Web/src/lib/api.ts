@@ -129,3 +129,41 @@ export async function getMyListings(token: string, page: number): Promise<Listin
   if (data) return data;
   throw new ApiUnavailableError(`HTTP ${response.status}`);
 }
+
+// --- Ponuky (modul Projects na backende) ---
+
+export type Offer = Schemas["OfferResponse"];
+export type OfferStatus = Schemas["OfferStatus"];
+export type OfferInput = Schemas["OfferInput"];
+export type Profile = Schemas["ProfileResponse"];
+
+/** Ponuky na môj inzerát (iba autor inzerátu – iným API vráti 403). */
+export async function getListingOffers(token: string, listingId: string): Promise<Offer[]> {
+  const { data, response } = await call(() =>
+    client.GET("/api/v1/listings/{listingId}/offers", {
+      params: { path: { listingId } },
+      headers: authHeaders(token),
+    }),
+  );
+  if (data) return data;
+  throw new ApiUnavailableError(`HTTP ${response.status}`);
+}
+
+/** Ponuky, ktoré prihlásený používateľ poslal (všetky stavy, najnovšie prvé). */
+export const getMyOffers = cache(async (token: string): Promise<Offer[]> => {
+  const { data, response } = await call(() =>
+    client.GET("/api/v1/offers/mine", { headers: authHeaders(token) }),
+  );
+  if (data) return data;
+  throw new ApiUnavailableError(`HTTP ${response.status}`);
+});
+
+/** Verejný profil (napr. odborníka pri ponuke) alebo `null`, ak si ho ešte nevyplnil. */
+export const getProfile = cache(async (userId: string): Promise<Profile | null> => {
+  const { data, response } = await call(() =>
+    client.GET("/api/v1/profiles/{userId}", { params: { path: { userId } } }),
+  );
+  if (data) return data;
+  if (response.status === 404) return null;
+  throw new ApiUnavailableError(`HTTP ${response.status}`);
+});
