@@ -14,7 +14,18 @@ import {
 } from "lucide-react";
 import { ChevronLink } from "@/components/chevron-link";
 import { ListingCard } from "@/components/listing-card";
-import { getCategories, getListing, searchListings, type Listing } from "@/lib/api";
+import { OfferDecisionButtons } from "@/components/offer-buttons";
+import { OfferStatusBadge } from "@/components/offer-status-badge";
+import {
+  getCategories,
+  getListing,
+  getListingOffers,
+  getMyOffers,
+  getProfile,
+  searchListings,
+  type Listing,
+  type Offer,
+} from "@/lib/api";
 import { getAccessToken, getCurrentUser } from "@/lib/auth";
 import {
   categoryName,
@@ -23,9 +34,11 @@ import {
   formatDate,
   levelDescriptions,
   levelLabels,
+  plural,
   sizeLabels,
   statusLabels,
 } from "@/lib/listings";
+import { formatPrice, offerStatusLabels } from "@/lib/offers";
 
 export async function generateMetadata(props: PageProps<"/inzeraty/[id]">): Promise<Metadata> {
   const { id } = await props.params;
@@ -63,6 +76,13 @@ async function ListingDetail({ params }: { params: Params }) {
 
   const isOpen = listing.status === "open";
   const isOwner = user?.id === listing.ownerId;
+  // Autor vidí prijaté ponuky; odborník svoju ponuku na tento inzerát (ak ju poslal)
+  let offers: Offer[] | null = null;
+  let myOffer: Offer | null = null;
+  if (user && token) {
+    if (isOwner) offers = await getListingOffers(token, listing.id);
+    else myOffer = (await getMyOffers(token)).find((o) => o.listingId === listing.id) ?? null;
+  }
 
   return (
     <>
@@ -84,10 +104,12 @@ async function ListingDetail({ params }: { params: Params }) {
       <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,1fr)_300px]">
         {/* Na mobile ide rozpočet s tlačidlom hneď pod nadpis, na počítači je vpravo */}
         <aside className="lg:sticky lg:top-20 lg:order-last lg:self-start">
-          <BudgetCard listing={listing} isOwner={isOwner} />
+          <BudgetCard listing={listing} isOwner={isOwner} offers={offers} myOffer={myOffer} />
         </aside>
 
         <article className="min-w-0">
+          {offers && <ReceivedOffers offers={offers} listingOpen={isOpen} />}
+
           <Facts listing={listing} />
 
           <Section title="Popis">
@@ -226,11 +248,22 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 /**
- * Rozpočet a tlačidlo. Počet ponúk a údaje o zadávateľovi (meno, hodnotenie, overenie)
- * API zatiaľ nevracia – pribudnú s modulmi Identity, Profiles a Reviews.
+ * Rozpočet a tlačidlo. Autor vidí počet ponúk, odborník svoju ponuku, ak ju už poslal.
+ * Hodnotenie a overenie zadávateľa pribudne s modulom Reviews.
  */
-function BudgetCard({ listing, isOwner }: { listing: Listing; isOwner: boolean }) {
+function BudgetCard({
+  listing,
+  isOwner,
+  offers,
+  myOffer,
+}: {
+  listing: Listing;
+  isOwner: boolean;
+  offers: Offer[] | null;
+  myOffer: Offer | null;
+}) {
   const isOpen = listing.status === "open";
+  const activeOffer = myOffer && myOffer.status !== "withdrawn" ? myOffer : null;
   return (
     <div className="rounded-3xl bg-surface p-6">
       <p className="text-sm text-muted-foreground">Rozpočet</p>
@@ -246,9 +279,24 @@ function BudgetCard({ listing, isOwner }: { listing: Listing; isOwner: boolean }
               Upraviť inzerát
             </Link>
           )}
-          <p className="text-sm text-muted-foreground">Toto je tvoj inzerát.</p>
+          <p className="text-sm text-muted-foreground">
+            Toto je tvoj inzerát
+            {offers && offers.length > 0
+              ? ` · ${plural(offers.length, ["ponuka", "ponuky", "ponúk"])}`
+              : " · zatiaľ bez ponúk"}
+          </p>
           <ChevronLink href="/moje-inzeraty" className="text-sm">
             Moje inzeráty
+          </ChevronLink>
+        </div>
+      ) : activeOffer ? (
+        <div className="mt-5 space-y-2">
+          <p className="text-sm text-muted-foreground">Tvoja ponuka</p>
+          <p className="font-semibold">
+            {formatPrice(activeOffer.price)} · {offerStatusLabels[activeOffer.status]}
+          </p>
+          <ChevronLink href="/moje-ponuky" className="text-sm">
+            Moje ponuky
           </ChevronLink>
         </div>
       ) : isOpen ? (
@@ -276,5 +324,77 @@ function DetailSkeleton() {
         <div className="h-40 animate-pulse rounded-3xl bg-surface" />
       </div>
     </div>
+  );
+}
+
+/** Ponuky na môj inzerát: kto, za koľko, do kedy, správa a rozhodnutie. Vidí ich iba autor. */
+async function ReceivedOffers({ offers, listingOpen }: { offers: Offer[]; listingOpen: boolean }) {
+  // Profil odborníka (bio, zručnosti) pomáha porovnať ponuky – načíta sa pre všetkých naraz
+  const profiles = await Promise.all(
+    offers.map((o) => getProfile(o.freelancerId).catch(() => null)),
+  );
+  const pending = offers.filter((o) => o.status === "pending").length;
+
+  return (
+    <section className="mb-12">
+      <h2 className="mb-4 text-xl font-semibold tracking-tight">
+        Ponuky <span className="text-muted-foreground">· {offers.length}</span>
+      </h2>
+      {offers.length === 0 ? (
+        <p className="rounded-3xl bg-surface p-6 text-muted-foreground">
+          Keď ti odborníci pošlú ponuky, uvidíš ich tu a môžeš si jednu vybrať.
+        </p>
+      ) : (
+        <ul className="divide-y divide-border/60 overflow-hidden rounded-3xl bg-surface">
+          {offers.map((offer, i) => {
+            const profile = profiles[i];
+            const name = offer.freelancer?.displayName ?? "Odborník bez profilu";
+            return (
+              <li key={offer.id} className="space-y-3 p-5 sm:p-6">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-lg font-semibold tracking-tight">{name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {offer.freelancer?.city ?? "Mesto neuvedené"} · poslaná{" "}
+                      {formatDate(offer.createdAt)}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-semibold tracking-tight">
+                      {formatPrice(offer.price)}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      dodanie do {plural(offer.deliveryDays, ["dňa", "dní", "dní"])}
+                    </p>
+                  </div>
+                </div>
+                <p className="leading-relaxed whitespace-pre-line">{offer.message}</p>
+                {profile?.bio && <p className="text-sm text-muted-foreground">{profile.bio}</p>}
+                {profile && profile.skills.length > 0 && (
+                  <ul className="flex flex-wrap gap-1.5">
+                    {profile.skills.map((skill) => (
+                      <li key={skill} className="rounded-full bg-background px-3 py-1 text-xs">
+                        {skill}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <div className="pt-1">
+                  {offer.status === "pending" && listingOpen ? (
+                    <OfferDecisionButtons
+                      offerId={offer.id}
+                      specialist={name}
+                      otherPending={pending - 1}
+                    />
+                  ) : (
+                    <OfferStatusBadge status={offer.status} />
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
   );
 }

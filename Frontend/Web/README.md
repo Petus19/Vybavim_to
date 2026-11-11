@@ -4,7 +4,7 @@ The platform's frontend: **Next.js 16** (React, TypeScript), Tailwind CSS 4 and 
 
 No business logic lives here – the web app calls the API through a typed client generated in [`Shared/`](../Shared/README.md).
 
-> **Status:** the web app shows real data from the backend API (`Backend/Api`): categories, search, listing detail, sign-in (email/password and Google), creating, editing and withdrawing listings, and "my listings".
+> **Status:** the web app shows real data from the backend API (`Backend/Api`): categories, search, listing detail, sign-in (email/password and Google), creating, editing and withdrawing listings, "my listings", and **offers** – sending, comparing, accepting, rejecting and withdrawing them.
 
 ## Running
 
@@ -45,10 +45,11 @@ The API address can be changed in `.env.local` (template `.env.example`): `API_U
 | `/inzeraty` | `src/app/inzeraty/page.tsx` | listings with search, categories, a "Filters" panel and sorting |
 | `/inzeraty/[id]` | `src/app/inzeraty/[id]/page.tsx` | detail: facts as tiles, deliverables, skills, requirements, similar listings |
 | `/prihlasenie` | `src/app/prihlasenie/page.tsx` | sign in and register (tabs, `?rezim=registracia`, `?navrat=` return path) |
-| `/inzeraty/[id]/ponuka` | `src/app/inzeraty/[id]/ponuka/` | send an offer – **signed in only**; still a placeholder – the offers API is ready (`POST /api/v1/listings/{id}/offers`, see `Backend/Api/README.md`) |
+| `/inzeraty/[id]/ponuka` | `src/app/inzeraty/[id]/ponuka/` | send an offer (price, delivery days, message) – **signed in only** |
 | `/pridat-inzerat` | `src/app/pridat-inzerat/` | create a listing in 3 steps – **signed in only** |
 | `/inzeraty/[id]/upravit` | `src/app/inzeraty/[id]/upravit/` | edit a listing – **author only**, open listings only |
 | `/moje-inzeraty` | `src/app/moje-inzeraty/` | my listings in all statuses, withdraw – **signed in only** |
+| `/moje-ponuky` | `src/app/moje-ponuky/` | offers I sent with their status, withdraw a pending one – **signed in only** |
 
 ### Creating and editing a listing
 
@@ -85,10 +86,23 @@ Filters live in the URL, so a result can be shared as a link. Empty fields are l
 
 Fixed prices and hourly rates are **never compared with each other** – ranges and price sorting are handled by the backend (`SearchListings`).
 
+### Offers
+
+| Who | Where | What |
+| --- | --- | --- |
+| Specialist | "Poslať ponuku" on a listing → `/inzeraty/[id]/ponuka` | price (€, comma or dot), delivery in days, message for the client (max 2,000 characters). Validation in `src/lib/offers.ts` mirrors the backend (`Offer.Create`); API errors with a code (`offer.invalid_price` …) appear next to the field. After sending → `/moje-ponuky`. |
+| Specialist | listing detail | instead of the button: "Tvoja ponuka: 280 € · Čaká na rozhodnutie" with a link to My offers |
+| Specialist | `/moje-ponuky` | all sent offers, newest first, status badge; **Withdraw** for a pending offer |
+| Client (author) | listing detail, section **Ponuky** | every offer with the specialist's name, city, price, delivery, message, and – from their public profile – bio and skills to compare; **Accept** / **Reject** on pending offers of an open listing |
+
+- The page for sending an offer shows the reason instead of the form when the offer can't be sent: your own listing, a listing that no longer accepts offers, or an offer already sent (the API would refuse it anyway).
+- **Accept, reject and withdraw** ask for confirmation in place (`src/components/confirm-action-button.tsx`) and say what will happen – accepting moves the listing to "In progress" and **rejects the other pending offers**, which cannot be undone. The Server Action `decideOffer` (`src/app/moje-ponuky/actions.ts`) calls `POST /api/v1/offers/{id}/accept|reject|withdraw`; who may do what is checked by the API.
+- Offers come from `getListingOffers` (author only), `getMyOffers` and `getProfile` in `src/lib/api.ts`. "My offers" is also in the account menu.
+
 ### Not yet in the web app
 
 - **Listing author card** – the API now returns `owner` (from the Profiles module) on the listing detail; the card and a "my profile" page are the next web step.
-- **Number of offers** per listing – the offers API is ready (`GET /api/v1/listings/{id}/offers` for the author).
+- **Number of offers** in the "My listings" list – shown on the listing detail for now (one call per listing would be needed in the list).
 - **City list** for the filter – hard-coded in `src/lib/listings.ts` for now.
 
 ## Authentication
