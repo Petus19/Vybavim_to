@@ -68,5 +68,8 @@ allowed-confusables = ["–"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 # Test so skutočným modelom (sťahuje ~470 MB) sa bežne preskakuje: spustíš ho cez `uv run pytest -m model`
-addopts = "-q -m 'not model'"
-markers = ["model: needs the real embedding model (large download)"]
+addopts = "-q -m 'not model and not stack'"
+markers = [
+    "model: needs the real embedding model (large download)",
+    "stack: needs the running local stack (C# API with demo data + AI service)",
+]

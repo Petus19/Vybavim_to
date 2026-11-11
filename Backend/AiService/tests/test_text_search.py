@@ -17,7 +17,7 @@ def test_normalize_removes_diacritics_and_case() -> None:
 
 def test_terms_drop_filler_words_and_shorten_to_prefix() -> None:
     # „potrebujem“, „na“, „pre“ nič nehovoria o tom, čo človek hľadá
-    assert terms("Potrebujem logo pre kaviarne, na zajtra!") == ["log", "kavi", "zajtr"]
+    assert terms("Potrebujem logo pre kaviarne, na zajtra!") == ["log", "kavia", "zajtr"]
 
 
 def test_bm25_finds_words_in_any_order_and_form() -> None:
@@ -55,5 +55,6 @@ def test_terms_join_hyphenated_words_and_skip_numbers() -> None:
 
 
 def test_terms_unify_word_forms_ending_in_vowel() -> None:
-    assert terms("logo loga logá") == ["log", "log", "log"]
+    assert terms("logo loga logá logom logami") == ["log"] * 5
+    assert terms("s inzerátom webu weby") == ["inzer", "web", "web"]
     assert terms("SEO") == ["seo"]  # krátke slovo ostane celé

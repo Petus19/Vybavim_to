@@ -55,7 +55,7 @@ Only partly matching words with unrelated meaning are dropped ("oprava práčky"
 
 **Keeping the index fresh:** the service re-syncs with the C# API on its own – right after start-up and then every `AI_SYNC_INTERVAL` seconds (default 30) in a background task, so a new listing becomes searchable without calling `/index`. Because indexing is incremental, a run with no changes embeds nothing. This is polling – simple, and the services stay decoupled; the proper next step is domain events from the C# API (outbox), which also removes the periodic full read. If the C# API is down, the task logs a warning and tries again.
 
-BM25 details: words without diacritics, cut to 5 characters and one final vowel dropped as a crude Slovak stemmer, hyphens joined ("Wi-Fi" = "wifi"), numbers and filler words ("chcem", "potrebujem", "pre", "kto", "eur" …) ignored. The index is rebuilt in memory from the `ai` table after start-up and after every `/index` (milliseconds for hundreds of listings).
+BM25 details: words without diacritics, one case ending dropped and cut to 5 characters as a crude Slovak stemmer, hyphens joined ("Wi-Fi" = "wifi"), numbers and filler words ("chcem", "potrebujem", "pre", "kto", "eur" …) ignored. The index is rebuilt in memory from the `ai` table after start-up and after every `/index` (milliseconds for hundreds of listings).
 
 Response: `[{listing_id, title, status, score, keyword_match}]` – `score` is the cosine similarity (`null` if found only by words), `keyword_match` = all query words present. `min_score` can be overridden per request (`?min_score=0` returns everything ranked).
 
@@ -70,7 +70,7 @@ uv run python -m ai_service.evaluation --model A --model B   # compare embedding
 
 **Methods compared:**
 - **keyword** – a faithful copy of the current C# API search: the whole query as one substring of title + description + skills, ignoring case and diacritics (`ILIKE` + `unaccent`), no relevance ranking;
-- **BM25** – classic full-text ranking (as in Lucene / Elasticsearch), with words cut to their first 5 characters and one final vowel dropped as a crude Slovak stemmer ("logo" = "loga" = "logá") – a deliberately strong non-AI baseline;
+- **BM25** – classic full-text ranking (as in Lucene / Elasticsearch), with a crude Slovak stemmer – one case ending dropped and the word cut to 5 characters ("logo" = "loga" = "logá" = "logom") – a deliberately strong non-AI baseline;
 - **semantic** – cosine similarity of embeddings, the same text and maths as the service (exact search in memory instead of HNSW);
 - **hybrid** – BM25 and semantic rankings merged with Reciprocal Rank Fusion (`1 / (60 + rank)` summed over both lists), no filter;
 - **hybrid as served** – exactly what `GET /search` returns: the hybrid plus the relevance rules above (same code: `hybrid.fuse`).
@@ -80,7 +80,7 @@ uv run python -m ai_service.evaluation --model A --model B   # compare embedding
 | Method | recall@5 | MRR | exact | synonym | no-diacritics | typo | natural | no-answer → empty |
 |---|---|---|---|---|---|---|---|---|
 | keyword (current C# API) | **0.24** | 0.27 | 0.86 | 0.00 | 0.75 | 0.00 | 0.00 | 100% |
-| BM25 | **0.87** | 0.81 | 0.93 | 0.77 | 1.00 | 1.00 | 0.90 | 67% |
+| BM25 | **0.86** | 0.80 | 0.93 | 0.75 | 1.00 | 1.00 | 0.90 | 67% |
 | semantic – paraphrase-multilingual-MiniLM-L12-v2 (used) | **0.86** | 0.85 | 0.76 | 0.90 | 1.00 | 0.75 | 0.80 | 0% |
 | semantic – multilingual-e5-small | **0.86** | 0.94 | 0.89 | 0.76 | 1.00 | 1.00 | 0.90 | 0% |
 | hybrid – BM25 + MiniLM | **0.92** | 0.89 | 1.00 | 0.85 | 1.00 | 1.00 | 0.90 | 0% |
@@ -97,7 +97,7 @@ uv run python -m ai_service.evaluation --model A --model B   # compare embedding
 
 **What it shows:**
 - The current keyword search finds exact words but **nothing** for synonyms, typos or whole sentences – recall@5 0.24.
-- Even without AI, BM25 with a crude stemmer reaches 0.87 – a fair baseline matters; semantic search is better mainly on synonyms (0.90 vs 0.77) and finds the first correct result higher (MRR 0.85 vs 0.81).
+- Even without AI, BM25 with a crude stemmer reaches 0.86 – a fair baseline matters; semantic search is better mainly on synonyms (0.90 vs 0.75) and finds the first correct result higher (MRR 0.85 vs 0.80).
 - The **hybrid is best (0.92)**: BM25 catches exact words and product names, embeddings catch meaning.
 - **The served hybrid keeps almost all of it (0.91, MRR 0.91) and can say "nothing relevant"** for 5 of 6 no-answer queries. Because the word path rescues exact matches, the semantic cut-off can be stricter (0.45) than for semantic search alone (0.41).
 - e5 ranks better (MRR 0.94), but its scores sit in a narrow 0.81–0.90 band for both good and irrelevant queries, so a cut-off barely works. MiniLM separates them – so it stays the default.

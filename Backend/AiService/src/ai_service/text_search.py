@@ -39,25 +39,33 @@ def normalize(text: str) -> str:
 
 
 def terms(text: str, prefix_length: int = PREFIX_LENGTH) -> list[str]:
-    """Slová bez diakritiky a bez výplňových slov, skrátené na prvých `prefix_length` znakov.
+    """Slová bez diakritiky a bez výplňových slov, zbavené pádovej koncovky a skrátené na
+    `prefix_length` znakov.
 
-    Skracovanie je najjednoduchší „stemming“ pre slovenčinu: „kaviareň“, „kaviarne“, „kaviarni“
-    → všetko „kavia“. Bez neho by BM25 nespojil rôzne pády toho istého slova.
-    Krátke slová sa skloňujú na poslednej samohláske („logo“, „loga“, „logá“), preto sa po skrátení
-    odstráni jedna koncová samohláska – všetko je potom „log“. Aspoň 3 znaky ostanú („SEO“ = „seo“).
+    Je to najjednoduchší „stemming“ pre slovenčinu: „logo“, „loga“, „logá“, „logom“ → „log“;
+    „kaviareň“, „kaviarne“, „kaviarni“ → „kavia“. Bez neho by BM25 nespojil rôzne pády toho istého slova.
     Spojovník medzi písmenami sa zahodí: „Wi-Fi“ = „wifi“, „e-shop“ = „eshop“.
     Čísla sa vynechajú – „do 300 €“ je rozpočet, nie téma inzerátu.
     """
     words = re.findall(r"\w+", re.sub(r"(?<=\w)-(?=\w)", "", normalize(text)))
     return [
-        _stem(word[:prefix_length])
+        _stem(word)[:prefix_length]
         for word in words
         if len(word) > 1 and word not in STOPWORDS and not word.isdigit()
     ]
 
 
-def _stem(prefix: str) -> str:
-    return prefix[:-1] if len(prefix) > 3 and prefix[-1] in "aeiouy" else prefix
+# Najčastejšie pádové koncovky podstatných a prídavných mien (bez diakritiky), dlhšie najprv
+SUFFIXES = ("ami", "ach", "och", "ovi", "eho", "emu", "ych", "ym", "om", "ou", "ov", "mi", "ej")
+VOWELS = "aeiouy"
+
+
+def _stem(word: str) -> str:
+    """Odstráni jednu koncovku, ak zo slova ostanú aspoň 3 znaky („SEO“ ostane „seo“)."""
+    for suffix in SUFFIXES:
+        if word.endswith(suffix) and len(word) - len(suffix) >= 3:
+            return word[: -len(suffix)]
+    return word[:-1] if len(word) > 3 and word[-1] in VOWELS else word
 
 
 @dataclass(frozen=True)

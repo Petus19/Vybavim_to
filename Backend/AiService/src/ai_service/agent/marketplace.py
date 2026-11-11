@@ -83,6 +83,9 @@ class MarketplaceClient:
         except httpx.HTTPError as error:
             raise ApiError(503, "agent.api_unavailable", f"API nie je dostupné: {error}") from error
 
+    def close(self) -> None:
+        self._client.close()
+
     def get(self, path: str, **params: Any) -> Any:
         clean = {k: v for k, v in params.items() if v is not None}
         return self.request("GET", path, params=clean)
@@ -96,6 +99,9 @@ class SearchClient:
 
     def __init__(self, base_url: str, timeout: float = 30.0, client: httpx.Client | None = None) -> None:
         self._client = client or httpx.Client(base_url=base_url, timeout=timeout)
+
+    def close(self) -> None:
+        self._client.close()
 
     def search(self, query: str, limit: int) -> list[dict[str, Any]]:
         try:
