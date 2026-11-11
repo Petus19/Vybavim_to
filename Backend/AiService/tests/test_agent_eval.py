@@ -4,6 +4,7 @@ Keby kontrola prepustila zlý výsledok, čísla vo výsledkoch by klamali – p
 na prípad, keď má zlyhať.
 """
 
+import re
 from typing import Any
 
 import pytest
@@ -218,3 +219,12 @@ def test_report_contains_rates_costs_and_failure_reasons() -> None:
     assert "anthropic/claude-opus-5-5 – no workflow hints" in report
     assert "- `b`: stav sa zmenil" in report
     assert "| `a` | 1/1 | 1/1 |" in report
+
+
+def test_scenario_patterns_are_valid_regexes_without_control_characters() -> None:
+    # "\b" v YAML s jedným lomítkom je znak backspace, nie hranica slova – kontrola by nikdy neprešla
+    for s in load_scenarios():
+        reply = s.expect.reply
+        for pattern in (*reply.matches, *reply.not_matches):
+            assert not any(ord(ch) < 32 for ch in pattern), (s.id, pattern)
+            re.compile(pattern)

@@ -259,7 +259,7 @@
     tools: [get_offers_on_listing]
     forbidden_tools: [accept_offer, reject_offer]
     state: {unchanged: true}
-    reply: {matches: ["Marek|Hrušk", "\b7\b|sedem"]}
+    reply: {matches: ["Marek|Hrušk", "\\b7\\b|sedem"]}
 
 - id: holdout-client-reject-agency
   kind: act
