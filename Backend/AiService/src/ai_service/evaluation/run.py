@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from ai_service.evaluation.dataset import QUERY_KINDS, Dataset, EvalQuery
+from ai_service.evaluation.dataset import QUERY_KINDS, Dataset
 from ai_service.evaluation.metrics import mean, recall_at_k, reciprocal_rank
 from ai_service.evaluation.retrievers import Retriever, SemanticRetriever
 
@@ -17,9 +17,11 @@ class MethodResult:
     mrr: float
     recall_by_kind: dict[str, float]
     misses: tuple[str, ...]  # dopyty, kde nie je ani jeden správny inzerát v top K – na ručnú kontrolu
+    no_answer_empty: float  # podiel dopytov BEZ správnej odpovede, na ktoré metóda poctivo nevrátila nič
 
 
-def evaluate(retriever: Retriever, queries: Sequence[EvalQuery]) -> MethodResult:
+def evaluate(retriever: Retriever, dataset: Dataset) -> MethodResult:
+    queries = dataset.answerable
     recalls: dict[str, float] = {}
     reciprocal_ranks = []
     misses = []
@@ -35,8 +37,15 @@ def evaluate(retriever: Retriever, queries: Sequence[EvalQuery]) -> MethodResult
         for kind in QUERY_KINDS
         if any(q.kind == kind for q in queries)
     }
+    unanswerable = [q for q in dataset.queries if not q.relevant]
+    no_answer_empty = mean([1.0 if not retriever.rank(q.text) else 0.0 for q in unanswerable])
     return MethodResult(
-        retriever.name, mean(list(recalls.values())), mean(reciprocal_ranks), by_kind, tuple(misses)
+        retriever.name,
+        mean(list(recalls.values())),
+        mean(reciprocal_ranks),
+        by_kind,
+        tuple(misses),
+        no_answer_empty,
     )
 
 
@@ -71,12 +80,14 @@ def threshold_analysis(retriever: SemanticRetriever, dataset: Dataset, steps: in
 def results_table(results: Sequence[MethodResult]) -> str:
     kinds = list(results[0].recall_by_kind)
     lines = [
-        f"| Method | recall@{K} | MRR | " + " | ".join(kinds) + " |",
-        "|---|---|---|" + "---|" * len(kinds),
+        f"| Method | recall@{K} | MRR | " + " | ".join(kinds) + " | no-answer → empty |",
+        "|---|---|---|" + "---|" * len(kinds) + "---|",
     ]
     for r in results:
         per_kind = " | ".join(f"{r.recall_by_kind[kind]:.2f}" for kind in kinds)
-        lines.append(f"| {r.name} | **{r.recall_at_k:.2f}** | {r.mrr:.2f} | {per_kind} |")
+        lines.append(
+            f"| {r.name} | **{r.recall_at_k:.2f}** | {r.mrr:.2f} | {per_kind} | {r.no_answer_empty:.0%} |"
+        )
     return "\n".join(lines)
 
 

@@ -25,6 +25,14 @@ class Settings(BaseSettings):
     # Vybraný porovnaním so multilingual-e5-small na slovenských dopytoch.
     embedding_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 
+    # Minimálna kosínusová podobnosť pre výsledok hybridného hľadania (nastavené vyhodnotením pre MiniLM).
+    # Iný model má inú škálu skóre – pri jeho zmene treba hodnotu znova odmerať.
+    min_score: float = 0.45
+
+    # Ako často (v sekundách) si služba sama stiahne zmeny inzerátov z C# API a obnoví index.
+    # 0 = vypnuté (iba ručne cez POST /index). Indexovanie je inkrementálne, takže beh bez zmien je lacný.
+    sync_interval: float = 30.0
+
 
 @lru_cache
 def get_settings() -> Settings:

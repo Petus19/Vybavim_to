@@ -22,7 +22,7 @@ def vector(*values: float) -> np.ndarray:
 
 
 def row(listing_id: int, title: str, embedding: np.ndarray, content_hash: str = "h") -> StoredEmbedding:
-    return StoredEmbedding(UUID(int=listing_id), title, "open", content_hash, embedding)
+    return StoredEmbedding(UUID(int=listing_id), title, "open", content_hash, embedding, f"{title} text")
 
 
 @pytest.fixture(scope="module")

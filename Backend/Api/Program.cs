@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Scalar.AspNetCore;
 using Vybavim.Api.OpenApi;
+using Vybavim.Common.Database;
 using Vybavim.Common.Extensions;
 using Vybavim.Modules.Identity;
 using Vybavim.Modules.Listings;
@@ -92,6 +93,21 @@ if (app.Environment.IsDevelopment())
     // Dokumentácia API: http://localhost:5080/scalar
     app.MapOpenApi();
     app.MapScalarApiReference();
+
+    if (DevData.DemoAccountsEnabled(app.Configuration))
+    {
+        // Vráti demo dáta do východiskového stavu – pre vyhodnotenie AI agenta, aby každý scenár
+        // začínal rovnako. Existuje IBA vo vývoji so zapnutými demo účtami; v dokumentácii API nie je.
+        app.MapPost("/api/v1/dev/reset-demo-data", async (IEnumerable<IDevDataResetter> resetters, CancellationToken ct) =>
+        {
+            foreach (var resetter in resetters)
+            {
+                await resetter.ResetAsync(ct);
+            }
+
+            return Results.NoContent();
+        }).ExcludeFromDescription();
+    }
 }
 
 app.MapGet("/api/v1/health", () => Results.Ok(new { status = "ok" }))

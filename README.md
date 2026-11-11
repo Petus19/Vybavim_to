@@ -4,7 +4,7 @@
 
 **A two-sided service marketplace** – people and small businesses post a job ("logo for my café", "office network support"), and freelancers or agencies respond. The first target market is IT and graphic design in Slovakia (hence the Slovak UI; *Vybavím to* means *"I'll get it done"*).
 
-> **Status:** work in progress (started October 2026). Browsing and search, accounts (email/password + Google) and posting/managing listings work end to end (web + API + database). Profiles and **offers on listings** (send, accept → listing moves to in-progress, reject, withdraw) are done in the API; their web pages are next. A separate **Python AI service** already does semantic search, with a measured improvement over keyword search. Then projects, chat and reviews – see [Roadmap](#roadmap).
+> **Status:** work in progress (started October 2026). Browsing and search, accounts (email/password + Google) and posting/managing listings work end to end (web + API + database). Profiles and **offers on listings** (send, accept → listing moves to in-progress, reject, withdraw) are done in the API; their web pages are next. A separate **Python AI service** does hybrid semantic search and runs an **AI agent** that acts in the marketplace through the public API, with human confirmation before every change – both measured, not assumed. Then projects, chat and reviews – see [Roadmap](#roadmap).
 
 | Listings with search and filters | Listing detail |
 |---|---|
@@ -19,8 +19,9 @@
 - **Backend architecture** – a *modular monolith* in C# / ASP.NET Core (.NET 10): each business module owns its code, its database schema and a small public contract. Module boundaries are enforced by the compiler **and** by automated architecture tests.
 - **Domain modelling** – entities protect their own rules (factory methods, private setters, explicit state transitions); every broken rule has a stable error code and a human-readable message.
 - **A real REST API** – accent- and case-insensitive text search with filters, paging, authentication with access/refresh tokens and Google sign-in, role-based authorization, RFC 9457 error responses, OpenAPI docs.
-- **Testing and CI** – 118 automated C# tests: unit, architecture, and integration tests that run the whole API against a throw-away PostgreSQL in Docker (Testcontainers), plus 42 Python tests for the AI service. GitHub Actions builds and tests the backend, the AI service (including its Docker image) and the frontend on every pull request.
-- **AI service (Python)** – a FastAPI service next to the C# API. Multilingual sentence embeddings stored in PostgreSQL with pgvector (HNSW) power semantic search and "similar listings": a query like "someone to design a company sign" finds the logo job with no words in common. **Measured, not assumed:** on a labelled set of 43 Slovak queries, recall@5 goes from **0.24** (current keyword search) to **0.86** (semantic) and **0.91** (hybrid with BM25); the evaluation also decided which embedding model to keep. See [`Backend/AiService`](Backend/AiService/README.md).
+- **Testing and CI** – 126 automated C# tests: unit, architecture, and integration tests that run the whole API against a throw-away PostgreSQL in Docker (Testcontainers), plus 115 Python tests for the AI service and the agent. GitHub Actions builds and tests the backend, the AI service (including its Docker image) and the frontend on every pull request.
+- **AI service (Python)** – a FastAPI service next to the C# API. Multilingual sentence embeddings stored in PostgreSQL with pgvector (HNSW) power semantic search and "similar listings": a query like "someone to design a company sign" finds the logo job with no words in common. **Measured, not assumed:** on a labelled set of 43 Slovak queries, recall@5 goes from **0.24** (current keyword search) to **0.86** (semantic) and **0.91** (hybrid with BM25, which can also answer "nothing relevant"); the evaluation also decided which embedding model to keep. See [`Backend/AiService`](Backend/AiService/README.md).
+- **AI agent** – from a request in Slovak (*"Potrebujem logo pre kaviareň v Košiciach do 200 €"*, *"Prijmi ponuku od Lucie"*) the agent calls the **public REST API as tools** with the user's own token: it posts listings, compares and accepts offers, finds work and sends offers. **Every write shows a preview and needs an explicit "y" – enforced in code, not in the prompt.** The model provider is **one environment variable**: a local model via Ollama or Claude via the Anthropic SDK. On 24 scenarios checked through the API (including prompt injection and 4 held-out cases): **Claude Opus 5.5 and Haiku 5.5 100 %**, local qwen2.5:7b 62 % (0 % held-out); redesigning the tools around user intent raised every model. See [AI agent](Backend/AiService/README.md#ai-agent).
 - **Teamwork** – two developers, every change goes through a branch, a descriptive pull request and a green CI run. The web client consumes TypeScript types generated from the API's OpenAPI document.
 
 ## Team
@@ -51,6 +52,8 @@ flowchart LR
     web -. "OAuth 2.0 + PKCE" .-> google["Google sign-in"]
     ai["AI service<br/>Python · FastAPI<br/>embeddings, semantic search"] -->|"REST (public API only)"| api
     ai -->|"own schema ai<br/>pgvector"| db
+    agent["AI agent<br/>LLM: Ollama or Claude"] -->|"REST with the user's token<br/>(confirmation before writes)"| api
+    agent -->|hybrid search| ai
 ```
 
 ```
@@ -95,6 +98,8 @@ Modules that exist as empty skeletons for later phases: Chat, Notifications, Rev
 | Composition root | [`Api/Program.cs`](Backend/Api/Program.cs) |
 | AI: incremental indexing and vector search (pgvector) | [`AiService/src/ai_service/indexer.py`](Backend/AiService/src/ai_service/indexer.py), [`repository.py`](Backend/AiService/src/ai_service/repository.py) |
 | AI: search evaluation (keyword vs BM25 vs semantic vs hybrid) | [`AiService/src/ai_service/evaluation/`](Backend/AiService/src/ai_service/evaluation/) |
+| AI agent: tools with a confirmation gate, the agent loop, model providers | [`agent/tools.py`](Backend/AiService/src/ai_service/agent/tools.py), [`loop.py`](Backend/AiService/src/ai_service/agent/loop.py), [`providers/`](Backend/AiService/src/ai_service/agent/providers/) |
+| AI agent: scenarios, state checks and results | [`agent/eval/`](Backend/AiService/src/ai_service/agent/eval/), [`results.md`](Backend/AiService/src/ai_service/agent/eval/results.md) |
 
 ## Tech stack
 
@@ -108,6 +113,7 @@ Modules that exist as empty skeletons for later phases: Chat, Notifications, Rev
 | Testing | xUnit v3 (Microsoft.Testing.Platform), Testcontainers, WebApplicationFactory |
 | Dev environment | Docker Compose: PostgreSQL, Redis, S3-compatible storage (RustFS), Mailpit |
 | AI service | Python 3.13, FastAPI, Pydantic, uv, sentence-transformers (PyTorch, CPU), pgvector, pytest + Testcontainers, Ruff |
+| AI agent | Anthropic SDK (Claude Opus 5.5 / Haiku 5.5), Ollama (qwen2.5:7b, local), own provider-neutral agent loop |
 | CI | GitHub Actions |
 
 ---
@@ -145,10 +151,27 @@ npm run dev
 cd Backend/AiService
 uv sync
 uv run uvicorn ai_service.main:app --port 8000
-#    → http://localhost:8000/docs   (call POST /index once, then try GET /search)
+#    → http://localhost:8000/docs   (listings are indexed automatically after start-up)
 ```
 
-**Demo data:** 4 categories, 12 listings and their authors' profiles are created automatically in development. A development-only admin account is seeded as well: user `Admin`, password `Admin123` (never created outside the Development environment). You can also register a new account on the web.
+**AI agent (optional)** – needs the API and the AI service running, plus [Ollama](https://ollama.com) with `ollama pull qwen2.5:7b`, or a Claude API key in `Backend/AiService/.env` (`ANTHROPIC_API_KEY=…`, `AGENT_PROVIDER=api`):
+
+```bash
+cd Backend/AiService
+uv run python -m ai_service.agent --as client       # or --as specialist
+```
+
+**Demo data:** 4 categories, 62 listings and their authors' profiles are created automatically in development. Development-only accounts are seeded as well (never created outside the Development environment):
+
+| User | Password | Role in the demo |
+|---|---|---|
+| `Admin` | `Admin123` | administrator |
+| `client.demo` | `Demo1234` | a car repair shop in Košice with 3 listings and 4 offers on them |
+| `specialist.demo` | `Demo1234` | graphic designer (offer on the logo redesign) |
+| `specialist2.demo` | `Demo1234` | junior web & graphic designer (cheaper competing offers) |
+| `specialist3.demo` | `Demo1234` | performance-marketing agency (Google Ads offer) |
+
+The demo accounts and the extra 50 listings (one of them carries a planted prompt-injection text for the agent's safety scenario) (switch `DevData:DemoAccounts` in `appsettings.Development.json`) exist for the AI agent and its evaluation. You can also register a new account on the web.
 
 **Google sign-in is optional** – the button appears only when `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set in `Frontend/Web/.env.local` (see `.env.example`). Everything else works without it.
 
@@ -156,7 +179,7 @@ uv run uvicorn ai_service.main:app --port 8000
 
 ```bash
 cd Backend
-dotnet test        # 118 tests; Docker must be running (integration tests start their own PostgreSQL)
+dotnet test        # 126 tests; Docker must be running (integration tests start their own PostgreSQL)
 ```
 
 ```bash
@@ -166,8 +189,9 @@ npm run lint && npm run typecheck && npm run build
 
 ```bash
 cd Backend/AiService
-uv run pytest                          # 42 tests; Docker must be running (pgvector container)
+uv run pytest                          # 115 tests; Docker must be running (pgvector container)
 uv run python -m ai_service.evaluation # search quality: recall@5 and MRR per method
+uv run python -m ai_service.agent.eval --provider local   # agent: 24 scenarios against the running stack
 ```
 
 ### Troubleshooting
@@ -209,7 +233,7 @@ Base URL `http://localhost:5080/api/v1` · full reference in [`Backend/Api/READM
 |---|---|---|
 | 0 – Foundation | architecture, Docker, database, search API, tests, CI | ✅ done |
 | 1 – MVP | accounts ✅, Google sign-in ✅, profiles ✅, posting listings ✅, offers on listings ✅ (API), **choosing a specialist → project**, chat, reviews, email notifications, GDPR tools | in progress |
-| 2 – Monetization & AI | Stripe subscriptions; AI features in a separate **Python (FastAPI) service** – foundation ✅, semantic search ✅, search evaluation ✅; next: category suggestion (trained scikit-learn classifier), using the service from the C# API and web, listing-writing assistant (LLM), content moderation | AI in progress |
+| 2 – Monetization & AI | Stripe subscriptions; AI features in a separate **Python (FastAPI) service** – foundation ✅, semantic search ✅, search evaluation ✅, **AI agent with evaluation ✅**; next: the agent in the web app, category suggestion (trained scikit-learn classifier), using the service from the C# API and web, listing-writing assistant (LLM), content moderation | AI in progress |
 | 3 – Growth | mobile app (Expo) on the same API, escrow payments, matching/recommendations and fraud detection (ML) | planned |
 
 The AI service never reads other modules' tables: it calls the public REST API (later it will also subscribe to domain events), so it has the same permissions as a regular user. It keeps only its own `ai` schema for embeddings.

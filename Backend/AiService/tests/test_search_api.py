@@ -1,5 +1,6 @@
 """Indexovanie a hľadanie cez HTTP – s falošným modelom, úložiskom v pamäti a inzerátmi v pamäti."""
 
+import time
 from collections.abc import Iterator
 from dataclasses import dataclass
 from uuid import UUID
@@ -64,24 +65,59 @@ def test_index_reembeds_changed_listing(api: Fixture) -> None:
 def test_search_returns_most_similar_first(api: Fixture) -> None:
     api.client.post("/index")
 
-    response = api.client.get("/search", params={"q": "potrebujem znak pre firmu od grafika"})
+    response = api.client.get("/search", params={"q": "potrebujem znak pre firmu od grafika", "min_score": 0})
     hits = response.json()
 
     assert response.status_code == 200
     assert hits[0]["listing_id"] == str(LOGO.id)
     assert hits[0]["score"] > hits[1]["score"]
-    assert set(hits[0]) == {"listing_id", "title", "status", "score"}
+    assert set(hits[0]) == {"listing_id", "title", "status", "score", "keyword_match"}
+
+
+def test_search_hides_results_below_min_score(api: Fixture) -> None:
+    api.client.post("/index")
+
+    response = api.client.get("/search", params={"q": "potrebujem znak pre firmu od grafika"})
+
+    assert [hit["listing_id"] for hit in response.json()] == [str(LOGO.id)]
+
+
+def test_search_returns_empty_list_when_nothing_is_relevant(api: Fixture) -> None:
+    api.client.post("/index")
+
+    response = api.client.get("/search", params={"q": "upratovanie kancelárie"})
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_search_finds_exact_words_even_with_low_similarity(api: Fixture) -> None:
+    api.client.post("/index")
+
+    # Falošný model nepozná slovo „kozmetika“ (nízke skóre), ale BM25 nájde všetky slová dopytu
+    hits = api.client.get("/search", params={"q": "kozmetikou"}).json()
+
+    assert [hit["listing_id"] for hit in hits] == [str(ESHOP.id)]
+    assert hits[0]["keyword_match"] is True
+    assert hits[0]["score"] < 0.41
+
+
+def test_search_before_indexing_returns_nothing(api: Fixture) -> None:
+    assert api.client.get("/search", params={"q": "logo"}).json() == []
 
 
 def test_search_respects_limit(api: Fixture) -> None:
     api.client.post("/index")
 
-    response = api.client.get("/search", params={"q": "wifi", "limit": 1})
+    response = api.client.get("/search", params={"q": "wifi", "limit": 1, "min_score": 0})
 
     assert len(response.json()) == 1
 
 
-@pytest.mark.parametrize("params", [{"q": "a"}, {"q": "logo", "limit": 0}, {"q": "logo", "limit": 51}, {}])
+@pytest.mark.parametrize(
+    "params",
+    [{"q": "a"}, {"q": "logo", "limit": 0}, {"q": "logo", "limit": 51}, {"q": "logo", "min_score": 2}, {}],
+)
 def test_search_invalid_query_returns_422(api: Fixture, params: dict[str, object]) -> None:
     response = api.client.get("/search", params=params)
 
@@ -103,3 +139,39 @@ def test_similar_unknown_listing_returns_404(api: Fixture) -> None:
     response = api.client.get(f"/listings/{UUID(int=999)}/similar")
 
     assert response.status_code == 404
+
+
+def test_background_sync_indexes_new_listings_without_manual_index() -> None:
+    embedder = FakeEmbedder()
+    listings = InMemoryListings([LOGO])
+    services = Services(
+        embedder=embedder, repository=InMemoryRepository(), listings=listings, sync_interval=0.02
+    )
+
+    with TestClient(create_app(lambda _settings: services)) as client:
+        listings.documents = [LOGO, WIFI]  # v C# API pribudol inzerát; nikto nevolá POST /index
+
+        deadline = time.monotonic() + 5
+        hits: list[dict[str, object]] = []
+        while not hits and time.monotonic() < deadline:
+            time.sleep(0.05)
+            hits = client.get("/search", params={"q": "wifi sieť", "min_score": 0.3}).json()
+
+    assert [hit["listing_id"] for hit in hits] == [str(WIFI.id)]
+
+
+def test_background_sync_survives_api_outage() -> None:
+    class BrokenListings:
+        def fetch_all(self) -> list[object]:
+            raise ConnectionError("C# API nebeží")
+
+    services = Services(
+        embedder=FakeEmbedder(),
+        repository=InMemoryRepository(),
+        listings=BrokenListings(),  # type: ignore[arg-type]
+        sync_interval=0.02,
+    )
+
+    with TestClient(create_app(lambda _settings: services)) as client:
+        time.sleep(0.1)  # niekoľko neúspešných pokusov na pozadí
+        assert client.get("/health").status_code == 200

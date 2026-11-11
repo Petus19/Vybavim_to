@@ -29,6 +29,10 @@ public static class ProfilesModule
 
         // Testovacie profily – spustí ich Api iba vo vývoji
         services.AddScoped<IDevDataSeeder, ProfilesDevSeeder>();
+        if (DevData.DemoAccountsEnabled(configuration))
+        {
+            services.AddScoped<IDevDataSeeder, ProfilesDemoSeeder>();   // demo účty pre AI agenta
+        }
 
         return services;
     }

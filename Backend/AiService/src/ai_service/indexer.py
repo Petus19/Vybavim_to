@@ -25,7 +25,9 @@ def reindex(source: ListingsSource, embedder: Embedder, repository: EmbeddingRep
         vectors = embedder.embed([d.text() for d in changed])  # všetky naraz (v dávkach) – rýchlejšie
         repository.upsert(
             [
-                StoredEmbedding(d.id, d.title, d.status, d.content_hash(embedder.model_name), vector)
+                StoredEmbedding(
+                    d.id, d.title, d.status, d.content_hash(embedder.model_name), vector, d.search_text()
+                )
                 for d, vector in zip(changed, vectors, strict=True)
             ],
             embedder.model_name,

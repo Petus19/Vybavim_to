@@ -43,5 +43,9 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 
         // Namiesto databázy z appsettings.Development.json použi dočasnú testovaciu
         builder.UseSetting("ConnectionStrings:Database", _database.GetConnectionString());
+
+        // Demo účty a ďalších 49 inzerátov (pre AI agenta) vypneme – testy počítajú s presne 12 inzerátmi.
+        // Demo dáta overuje DemoDataTests s vlastným Api (DemoApiFactory).
+        builder.UseSetting("DevData:DemoAccounts", "false");
     }
 }

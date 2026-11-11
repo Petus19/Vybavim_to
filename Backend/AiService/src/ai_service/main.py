@@ -1,8 +1,11 @@
 """Vstupný bod služby: vytvorí FastAPI aplikáciu (obdoba Program.cs v C# API)."""
 
+import asyncio
+import logging
+import threading
 from collections.abc import AsyncIterator, Callable
-from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from contextlib import asynccontextmanager, suppress
+from dataclasses import dataclass, field
 from typing import Annotated
 from uuid import UUID
 
@@ -12,9 +15,12 @@ from pydantic import BaseModel
 from ai_service import __version__
 from ai_service.config import Settings, get_settings
 from ai_service.embeddings import Embedder, SentenceTransformerEmbedder
+from ai_service.hybrid import DEFAULT_MIN_SCORE, HybridHit, HybridSearch
 from ai_service.indexer import IndexResult, reindex
 from ai_service.listings_client import ApiListingsSource, ListingsSource
 from ai_service.repository import EmbeddingRepository, Hit, PostgresEmbeddingRepository
+
+logger = logging.getLogger("ai_service")
 
 # --- Služby, ktoré endpointy potrebujú (obdoba registrácie v Dependency Injection v C#) ---
 
@@ -24,6 +30,23 @@ class Services:
     embedder: Embedder
     repository: EmbeddingRepository
     listings: ListingsSource
+    min_score: float = DEFAULT_MIN_SCORE
+    sync_interval: float = 0.0  # sekundy medzi automatickými synchronizáciami; 0 = vypnuté
+    search: HybridSearch = field(init=False)  # skladá sa z embedderu a úložiska
+    _index_lock: threading.Lock = field(init=False, default_factory=threading.Lock)
+
+    def __post_init__(self) -> None:
+        self.search = HybridSearch(self.embedder, self.repository)
+
+    def sync(self) -> IndexResult:
+        """Stiahne inzeráty z C# API, prepočíta nové a zmenené a obnoví BM25 index.
+
+        Zámok: ručné POST /index a automatická synchronizácia nebežia naraz.
+        """
+        with self._index_lock:
+            result = reindex(self.listings, self.embedder, self.repository)
+            self.search.refresh()
+            return result
 
 
 def build_services(settings: Settings) -> Services:
@@ -33,7 +56,31 @@ def build_services(settings: Settings) -> Services:
         embedder=embedder,
         repository=PostgresEmbeddingRepository(settings.database_url, embedder.dimension),
         listings=ApiListingsSource(settings.api_base_url),
+        min_score=settings.min_score,
+        sync_interval=settings.sync_interval,
     )
+
+
+async def _sync_forever(services: Services) -> None:
+    """Na pozadí: hneď po štarte a potom každých sync_interval sekúnd zosynchronizuj index s C# API.
+
+    Nový inzerát sa tak v hľadaní objaví sám, bez ručného POST /index. Je to „polling“ – jednoduché
+    a služby ostávajú oddelené; správne riešenie do budúcna sú udalosti z C# API (outbox).
+    Výpadok C# API službu nezhodí: chyba sa zapíše do logu a skúsi sa to o chvíľu znova.
+    """
+    while True:
+        try:
+            # Model a HTTP volania sú blokujúce → vo vlákne, aby server medzitým obsluhoval požiadavky
+            result = await asyncio.to_thread(services.sync)
+            if result.indexed or result.removed:
+                logger.info(
+                    "Index synchronizovaný: %s nových/zmenených, %s odstránených",
+                    result.indexed,
+                    result.removed,
+                )
+        except Exception as error:  # úloha na pozadí nesmie nikdy skončiť, preto zachytí všetko
+            logger.warning("Synchronizácia indexu zlyhala (skúsim znova): %s", error)
+        await asyncio.sleep(services.sync_interval)
 
 
 def get_services(request: Request) -> Services:
@@ -58,15 +105,34 @@ class IndexResponse(BaseModel):
     removed: int
 
 
-class SearchHit(BaseModel):
+class SimilarHit(BaseModel):
     listing_id: UUID
     title: str
     status: str
     score: float  # kosínusová podobnosť, 1 = rovnaký význam
 
     @classmethod
-    def from_hit(cls, hit: Hit) -> "SearchHit":
+    def from_hit(cls, hit: Hit) -> "SimilarHit":
         return cls(listing_id=hit.listing_id, title=hit.title, status=hit.status, score=round(hit.score, 4))
+
+
+class SearchHit(BaseModel):
+    listing_id: UUID
+    title: str
+    status: str
+    score: float | None  # kosínusová podobnosť; None = nájdené iba podľa slov
+    keyword_match: bool  # inzerát obsahuje všetky hľadané slová
+
+    @classmethod
+    def from_hit(cls, hit: HybridHit) -> "SearchHit":
+        score = None if hit.semantic_score is None else round(hit.semantic_score, 4)
+        return cls(
+            listing_id=hit.listing_id,
+            title=hit.title,
+            status=hit.status,
+            score=score,
+            keyword_match=hit.keyword_match,
+        )
 
 
 def create_app(services_factory: Callable[[Settings], Services] = build_services) -> FastAPI:
@@ -77,8 +143,15 @@ def create_app(services_factory: Callable[[Settings], Services] = build_services
         # Raz pri štarte: načítaj model do pamäte (pár sekúnd) a priprav tabuľku v databáze.
         services = services_factory(get_settings())
         services.repository.ensure_schema()
+        services.search.refresh()  # BM25 index z textov, ktoré už sú v databáze
         app.state.services = services
+
+        sync_task = asyncio.create_task(_sync_forever(services)) if services.sync_interval > 0 else None
         yield
+        if sync_task is not None:
+            sync_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await sync_task
 
     app = FastAPI(
         title="Vybavím to – AI service",
@@ -93,18 +166,25 @@ def create_app(services_factory: Callable[[Settings], Services] = build_services
 
     @app.post("/index", tags=["Semantic search"], summary="(Re)index all public listings from the main API")
     def index(services: ServicesDep) -> IndexResponse:
-        result: IndexResult = reindex(services.listings, services.embedder, services.repository)
+        result = services.sync()
         return IndexResponse(indexed=result.indexed, unchanged=result.unchanged, removed=result.removed)
 
-    @app.get("/search", tags=["Semantic search"], summary="Find listings by meaning, not exact words")
+    @app.get(
+        "/search",
+        tags=["Semantic search"],
+        summary="Hybrid search: meaning (embeddings) + words (BM25); empty list = nothing relevant",
+    )
     def search(
         services: ServicesDep,
         q: Annotated[str, Query(min_length=2, max_length=500, description="What the user is looking for")],
         limit: Annotated[int, Query(ge=1, le=50)] = 10,
+        min_score: Annotated[
+            float | None,
+            Query(ge=0, le=1, description="Minimum cosine similarity; default from settings (0.45)"),
+        ] = None,
     ) -> list[SearchHit]:
-        # Dopyt prejde tým istým modelom ako inzeráty – inak by vektory neboli porovnateľné
-        query_vector = services.embedder.embed([q])[0]
-        return [SearchHit.from_hit(h) for h in services.repository.search(query_vector, limit)]
+        threshold = services.min_score if min_score is None else min_score
+        return [SearchHit.from_hit(h) for h in services.search.search(q, limit, threshold)]
 
     @app.get(
         "/listings/{listing_id}/similar",
@@ -116,11 +196,11 @@ def create_app(services_factory: Callable[[Settings], Services] = build_services
         services: ServicesDep,
         listing_id: UUID,
         limit: Annotated[int, Query(ge=1, le=20)] = 5,
-    ) -> list[SearchHit]:
+    ) -> list[SimilarHit]:
         hits = services.repository.similar(listing_id, limit)
         if hits is None:
             raise HTTPException(status_code=404, detail="Listing is not indexed.")
-        return [SearchHit.from_hit(h) for h in hits]
+        return [SimilarHit.from_hit(h) for h in hits]
 
     return app
 
