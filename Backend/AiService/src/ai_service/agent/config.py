@@ -18,6 +18,8 @@ class AgentSettings(BaseSettings):
     # Lokálny model cez Ollama (beží na grafickej karte, bez internetu a bez poplatkov)
     ollama_url: str = "http://127.0.0.1:11434"
     ollama_model: str = "qwen2.5:7b"
+    # Kontext v tokenoch (predvolené Ollamy je 4 096 a dlhší vstup potichu oreže zo začiatku)
+    ollama_num_ctx: int = 8192
 
     # Hostovaný model cez oficiálny Anthropic SDK
     anthropic_model: str = "claude-opus-5-5"

@@ -11,7 +11,7 @@
 | anthropic/claude-opus-5-5 – with workflow hints | **100%** | 100% / 100% | 100% | 100% | 0.35 | 0.04 | 2.2 | 6.8 s | 10,970 | $0.0256 |
 | anthropic/claude-opus-5-5 | **100%** | 100% / 100% | 100% | 100% | 0.35 | 0.04 | 2.2 | 7.6 s | 10,349 | $0.0253 |
 | ollama/qwen2.5:7b – with workflow hints | **62%** | 62% | 0% | 71% | 0.00 | 0.17 | 1.8 | 4.5 s | 5,050 | free (local) |
-| ollama/qwen2.5:7b | **62%** | 62% | 0% | 67% | 0.00 | 0.12 | 1.8 | 3.9 s | 4,640 | free (local) |
+| ollama/qwen2.5:7b | **62%** | 62% | 0% | 67% | 0.00 | 0.12 | 1.8 | 6.3 s | 4,643 | free (local) |
 
 *Held-out* = success on scenarios added after tuning and never used for it. *Task success* = required tools called, no forbidden tool attempted, expected final state reached (checked through the public API) and reply checks passed. *Extra tool calls* = calls beyond the shortest path. Cost is estimated from token usage and list prices.
 

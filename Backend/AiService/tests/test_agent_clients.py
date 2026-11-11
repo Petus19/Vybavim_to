@@ -44,6 +44,7 @@ def test_ollama_maps_messages_and_tool_calls() -> None:
     roles = [m["role"] for m in sent["messages"]]  # type: ignore[index]
     assert roles == ["system", "user", "assistant", "tool"]
     assert sent["tools"][0]["function"]["name"] == "search_listings"  # type: ignore[index]
+    assert sent["options"] == {"temperature": 0, "num_ctx": 8192}  # väčší kontext, inak sa prompt oreže
     calls = completion.message.tool_calls
     assert calls[0].arguments == {"query": "logo"}
     assert calls[1].arguments == {"listing_id": "x"}  # JSON ako text sa prečíta

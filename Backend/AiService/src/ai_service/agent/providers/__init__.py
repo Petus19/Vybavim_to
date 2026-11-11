@@ -8,7 +8,9 @@ def create_provider(settings: AgentSettings) -> LLMProvider:
     if settings.provider == "local":
         from ai_service.agent.providers.ollama import OllamaProvider
 
-        return OllamaProvider(settings.ollama_url, settings.ollama_model, settings.llm_timeout)
+        return OllamaProvider(
+            settings.ollama_url, settings.ollama_model, settings.llm_timeout, num_ctx=settings.ollama_num_ctx
+        )
 
     from ai_service.agent.providers.anthropic import AnthropicProvider  # SDK sa načíta, iba keď treba
 

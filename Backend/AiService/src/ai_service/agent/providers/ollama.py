@@ -24,10 +24,19 @@ from ai_service.agent.llm import (
 
 class OllamaProvider:
     def __init__(
-        self, base_url: str, model: str, timeout: float = 180.0, client: httpx.Client | None = None
+        self,
+        base_url: str,
+        model: str,
+        timeout: float = 180.0,
+        client: httpx.Client | None = None,
+        num_ctx: int = 8192,
     ) -> None:
         self.name = f"ollama/{model}"
         self._model = model
+        # Veľkosť kontextu v tokenoch. Ollama má predvolene 4 096 a čo sa nezmestí, POTICHU odreže zo
+        # začiatku – teda práve systémový prompt. Prompt s nástrojmi má ~2 500 tokenov, s výsledkami
+        # nástrojov sa k limitu ľahko dostane.
+        self._num_ctx = num_ctx
         self._client = client or httpx.Client(base_url=base_url, timeout=timeout)
 
     def complete(self, system: str, messages: list[Message], tools: list[ToolSpec]) -> Completion:
@@ -43,7 +52,7 @@ class OllamaProvider:
             ],
             "stream": False,
             # Teplota 0 = vždy najpravdepodobnejšia odpoveď → opakovateľnejšie vyhodnotenie
-            "options": {"temperature": 0},
+            "options": {"temperature": 0, "num_ctx": self._num_ctx},
         }
         try:
             response = self._client.post("/api/chat", json=payload)
