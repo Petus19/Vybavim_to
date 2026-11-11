@@ -26,7 +26,7 @@ def main() -> None:
     parser.add_argument("--runs", type=int, default=1, help="how many times to run each scenario")
     parser.add_argument("--scenario", action="append", help="run only this scenario id (repeatable)")
     parser.add_argument(
-        "--no-workflows", action="store_true", help="prompt without workflow hints (ablation)"
+        "--workflow-hints", action="store_true", help="add workflow hints to the prompt (ablation)"
     )
     parser.add_argument("--report-only", action="store_true", help="only rebuild results.md from saved runs")
     parser.add_argument(
@@ -71,9 +71,9 @@ def main() -> None:
             f"  {mark} run {record.run} {record.scenario:28} {record.seconds:5.1f} s{cost}  [{tools}]{detail}"
         )
 
-    variant = "bez postupov v prompte" if args.no_workflows else "s postupmi v prompte"
+    variant = "s postupmi v prompte" if args.workflow_hints else "predvolený prompt (bez postupov)"
     print(f"Model {provider.name}, {len(scenarios)} scenárov, {args.runs} behov každý, {variant}")
-    result = run_evaluation(scenarios, provider, settings, args.runs, not args.no_workflows, show)
+    result = run_evaluation(scenarios, provider, settings, args.runs, args.workflow_hints, show)
 
     passed = sum(1 for r in result.records if r.success)
     total_cost = sum(r.cost_usd or 0 for r in result.records)

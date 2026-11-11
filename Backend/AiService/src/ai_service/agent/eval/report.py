@@ -24,7 +24,7 @@ def load_results(directory: Path) -> list[dict[str, Any]]:
 
 
 def _label(result: dict[str, Any]) -> str:
-    return result["provider"] + ("" if result["workflows"] else " – no workflow hints")
+    return result["provider"] + (" – with workflow hints" if result["workflows"] else "")
 
 
 def _rate(records: Sequence[dict[str, Any]], key: str = "success") -> float:

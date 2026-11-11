@@ -57,7 +57,7 @@ class EvalRun:
 
     @property
     def label(self) -> str:
-        return self.provider + ("" if self.workflows else " (no workflow hints)")
+        return self.provider + (" (with workflow hints)" if self.workflows else "")
 
     def save(self, directory: Path = RESULTS_DIR) -> Path:
         directory.mkdir(parents=True, exist_ok=True)

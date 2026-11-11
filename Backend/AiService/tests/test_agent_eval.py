@@ -214,9 +214,9 @@ def test_report_contains_rates_costs_and_failure_reasons() -> None:
 
     report = build_report(results)
 
-    assert "| ollama/qwen2.5:7b | **50%** | 50% | – |" in report
+    assert "| ollama/qwen2.5:7b – with workflow hints | **50%** | 50% | – |" in report
     assert "free (local)" in report and "$0.0500" in report
-    assert "anthropic/claude-opus-5-5 – no workflow hints" in report
+    assert "ollama/qwen2.5:7b – with workflow hints" in report
     assert "- `b`: stav sa zmenil" in report
     assert "| `a` | 1/1 | 1/1 |" in report
 

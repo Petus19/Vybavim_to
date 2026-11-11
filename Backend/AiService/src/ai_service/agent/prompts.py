@@ -21,9 +21,10 @@ ROLE_DESCRIPTION: dict[Role, str] = {
 }
 
 
-def system_prompt(role: Role, user_name: str, today: date, workflows: bool = True) -> str:
-    """Zloží prompt. `workflows=False` vynechá typické postupy – vo vyhodnotení tak vieme odmerať,
-    či postupy (pridané kvôli malému lokálnemu modelu) pomáhajú alebo škodia väčšiemu modelu."""
+def system_prompt(role: Role, user_name: str, today: date, workflows: bool = False) -> str:
+    """Zloží prompt. Typické postupy (WORKFLOWS) sú predvolene VYPNUTÉ: ablácia vo vyhodnotení ukázala,
+    že nepomáhajú žiadnemu modelu (Claude 100 % s nimi aj bez nich, qwen2.5:7b 62 % / 62 %) a prompt
+    s nimi je dlhší. Ostávajú dostupné cez `workflows=True`, aby sa experiment dal zopakovať."""
     intro = f"""You are the assistant of "Vybavím to", a Slovak marketplace where clients post listings \
 (jobs such as "logo for my café") and specialists send offers on them.
 
