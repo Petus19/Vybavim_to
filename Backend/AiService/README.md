@@ -53,6 +53,8 @@ BM25 (`text_search.py`) and the embeddings (`hybrid.py`) are merged with Recipro
 
 Only partly matching words with unrelated meaning are dropped ("oprava práčky" – washing-machine repair – must not return "Oprava chýb na webe"). Results from rules 1–2 are listed before rule 3. **An empty list means nothing relevant** – which the agent relies on to not invent listings.
 
+**Keeping the index fresh:** the service re-syncs with the C# API on its own – right after start-up and then every `AI_SYNC_INTERVAL` seconds (default 30) in a background task, so a new listing becomes searchable without calling `/index`. Because indexing is incremental, a run with no changes embeds nothing. This is polling – simple, and the services stay decoupled; the proper next step is domain events from the C# API (outbox), which also removes the periodic full read. If the C# API is down, the task logs a warning and tries again.
+
 BM25 details: words without diacritics, cut to 5 characters and one final vowel dropped as a crude Slovak stemmer, hyphens joined ("Wi-Fi" = "wifi"), numbers and filler words ("chcem", "potrebujem", "pre", "kto", "eur" …) ignored. The index is rebuilt in memory from the `ai` table after start-up and after every `/index` (milliseconds for hundreds of listings).
 
 Response: `[{listing_id, title, status, score, keyword_match}]` – `score` is the cosine similarity (`null` if found only by words), `keyword_match` = all query words present. `min_score` can be overridden per request (`?min_score=0` returns everything ranked).
@@ -112,7 +114,7 @@ uv run uvicorn ai_service.main:app --reload --port 8000
 #   → http://localhost:8000/docs           (interactive API docs)
 ```
 
-The first start downloads the model (~470 MB) into the Hugging Face cache; later starts load it in a few seconds. Then call `POST /index` once and try `GET /search?q=…` in `/docs`.
+The first start downloads the model (~470 MB) into the Hugging Face cache; later starts load it in a few seconds. The listings are indexed automatically a moment after start-up; then try `GET /search?q=…` in `/docs`.
 
 ## Tests and checks
 
@@ -156,6 +158,7 @@ Environment variables with the `AI_` prefix (or a local `.env` file, never commi
 | `AI_API_BASE_URL` | `http://localhost:5080` | the main C# API – source of listings |
 | `AI_DATABASE_URL` | local PostgreSQL from `docker-compose.yml` | the service's own `ai` schema (embeddings) |
 | `AI_EMBEDDING_MODEL` | `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` | embedding model; a model with a different vector size needs the `ai.listing_embeddings` table recreated |
+| `AI_SYNC_INTERVAL` | `30` | seconds between automatic index syncs with the C# API; `0` = only manual `POST /index` |
 | `AI_MIN_SCORE` | `0.45` | minimum cosine similarity for a hybrid search result found by meaning; re-measure it when changing the model |
 
 ## Layout

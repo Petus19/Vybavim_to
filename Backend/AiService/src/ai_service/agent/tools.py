@@ -84,9 +84,12 @@ class OfferIdInput(BaseModel):
 
 
 class MyListingInput(BaseModel):
-    listing: str = Field(
-        min_length=1,
-        description="Ktorý z MOJICH inzerátov: jeho ID alebo časť názvu (napr. 'logo', 'Google Ads').",
+    listing: str | None = Field(
+        None,
+        description=(
+            "Ktorý z MOJICH inzerátov: jeho ID alebo časť názvu (napr. 'logo', 'Google Ads'). "
+            "Vynechaj, ak chce používateľ ponuky na všetky svoje inzeráty."
+        ),
     )
 
 
@@ -341,16 +344,9 @@ def build_read_tools(api: MarketplaceClient, search: SearchClient) -> list[Tool]
             ]
         }
 
-    def get_offers_on_listing(args: MyListingInput) -> dict[str, Any]:
-        listing = resolve_my_listing(api, args.listing)
-        if isinstance(listing, Ambiguous):
-            return {
-                "ambiguous": listing.candidates,
-                "note": "Názvu zodpovedá viac inzerátov. Spýtaj sa používateľa, ktorý myslí.",
-            }
-        offers = api.get(f"/api/v1/listings/{listing['id']}/offers")
+    def offers_with_profiles(listing_id: str) -> list[dict[str, Any]]:
         results = []
-        for offer in offers:
+        for offer in api.get(f"/api/v1/listings/{listing_id}/offers"):
             summary = _offer(offer)
             # Na porovnanie ponúk treba aj to, kto ich posiela – verejný profil špecialistu
             try:
@@ -360,6 +356,28 @@ def build_read_tools(api: MarketplaceClient, search: SearchClient) -> list[Tool]
             except ApiError:
                 summary["specialist_bio"] = None
             results.append(summary)
+        return results
+
+    def get_offers_on_listing(args: MyListingInput) -> dict[str, Any]:
+        if not (args.listing or "").strip():
+            # „Aké ponuky som dostal?“ – všetky moje inzeráty naraz, jeden krok pre model
+            mine = api.get("/api/v1/listings/mine", pageSize=50)["items"]
+            groups = [
+                {"listing_id": item["id"], "listing_title": item["title"], "offers": offers}
+                for item in mine
+                if item["status"] != "cancelled" and (offers := offers_with_profiles(item["id"]))
+            ]
+            if not groups:
+                return {"listings": [], "note": "Na tvoje inzeráty zatiaľ neprišli žiadne ponuky."}
+            return {"listings": groups}
+
+        listing = resolve_my_listing(api, args.listing or "")
+        if isinstance(listing, Ambiguous):
+            return {
+                "ambiguous": listing.candidates,
+                "note": "Názvu zodpovedá viac inzerátov. Spýtaj sa používateľa, ktorý myslí.",
+            }
+        results = offers_with_profiles(listing["id"])
         header = {"listing_id": listing["id"], "listing_title": listing["title"]}
         if not results:
             return header | {"offers": [], "note": "Na tento inzerát zatiaľ nie sú ponuky."}
@@ -400,14 +418,15 @@ def build_read_tools(api: MarketplaceClient, search: SearchClient) -> list[Tool]
         ),
         tool(
             "get_offers_on_listing",
-            "Ponuky špecialistov na MÔJ inzerát vrátane ich profilu. Inzerát zadaj ID alebo časťou názvu "
-            "(napr. 'logo') – netreba ho najprv hľadať.",
+            "Ponuky, ktoré som DOSTAL na svoje inzeráty, vrátane profilov špecialistov. Inzerát zadaj ID "
+            "alebo časťou názvu (napr. 'logo') – netreba ho najprv hľadať; bez inzerátu vráti ponuky "
+            "na všetky moje inzeráty.",
             MyListingInput,
             get_offers_on_listing,
         ),
         tool(
             "get_my_offers",
-            "Ponuky, ktoré prihlásený používateľ poslal (ako špecialista).",
+            "Ponuky, ktoré som POSLAL na cudzie inzeráty (ako špecialista). Nie ponuky, ktoré som dostal.",
             NoInput,
             get_my_offers,
         ),

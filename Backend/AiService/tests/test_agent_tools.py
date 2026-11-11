@@ -114,3 +114,15 @@ def test_search_with_no_results_tells_the_model_not_to_invent(api: FakeApi) -> N
     assert not is_error
     assert data["results"] == []
     assert "Nevymýšľaj" in data["note"]
+
+
+def test_offers_without_listing_returns_all_received_offers(api: FakeApi) -> None:
+    api.routes[f"/api/v1/listings/{ADS_ID}/offers"] = []
+    for item in MINE["items"]:
+        item["status"] = "open"
+
+    data, is_error = run(api, "get_offers_on_listing")
+
+    assert not is_error
+    assert [group["listing_title"] for group in data["listings"]] == ["Redizajn starého loga autoservisu"]
+    assert data["listings"][0]["offers"][0]["specialist"] == "Lucia Bartošová"

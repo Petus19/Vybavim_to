@@ -48,6 +48,9 @@ def _summary(data: Any) -> str:
             return f"{done[status]} {data.get('url', '')}".rstrip()
         if "ambiguous" in data:
             return f"nejednoznačné – {len(data['ambiguous'])} inzeráty"
+        if "listings" in data:
+            count = sum(len(group["offers"]) for group in data["listings"])
+            return f"{count} ponúk na {len(data['listings'])} inzerátoch"
         for key in ("results", "offers"):
             if key in data:
                 items = data[key]

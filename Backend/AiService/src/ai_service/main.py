@@ -1,7 +1,10 @@
 """Vstupný bod služby: vytvorí FastAPI aplikáciu (obdoba Program.cs v C# API)."""
 
+import asyncio
+import logging
+import threading
 from collections.abc import AsyncIterator, Callable
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
 from typing import Annotated
 from uuid import UUID
@@ -17,6 +20,8 @@ from ai_service.indexer import IndexResult, reindex
 from ai_service.listings_client import ApiListingsSource, ListingsSource
 from ai_service.repository import EmbeddingRepository, Hit, PostgresEmbeddingRepository
 
+logger = logging.getLogger("ai_service")
+
 # --- Služby, ktoré endpointy potrebujú (obdoba registrácie v Dependency Injection v C#) ---
 
 
@@ -26,10 +31,22 @@ class Services:
     repository: EmbeddingRepository
     listings: ListingsSource
     min_score: float = DEFAULT_MIN_SCORE
+    sync_interval: float = 0.0  # sekundy medzi automatickými synchronizáciami; 0 = vypnuté
     search: HybridSearch = field(init=False)  # skladá sa z embedderu a úložiska
+    _index_lock: threading.Lock = field(init=False, default_factory=threading.Lock)
 
     def __post_init__(self) -> None:
         self.search = HybridSearch(self.embedder, self.repository)
+
+    def sync(self) -> IndexResult:
+        """Stiahne inzeráty z C# API, prepočíta nové a zmenené a obnoví BM25 index.
+
+        Zámok: ručné POST /index a automatická synchronizácia nebežia naraz.
+        """
+        with self._index_lock:
+            result = reindex(self.listings, self.embedder, self.repository)
+            self.search.refresh()
+            return result
 
 
 def build_services(settings: Settings) -> Services:
@@ -40,7 +57,30 @@ def build_services(settings: Settings) -> Services:
         repository=PostgresEmbeddingRepository(settings.database_url, embedder.dimension),
         listings=ApiListingsSource(settings.api_base_url),
         min_score=settings.min_score,
+        sync_interval=settings.sync_interval,
     )
+
+
+async def _sync_forever(services: Services) -> None:
+    """Na pozadí: hneď po štarte a potom každých sync_interval sekúnd zosynchronizuj index s C# API.
+
+    Nový inzerát sa tak v hľadaní objaví sám, bez ručného POST /index. Je to „polling“ – jednoduché
+    a služby ostávajú oddelené; správne riešenie do budúcna sú udalosti z C# API (outbox).
+    Výpadok C# API službu nezhodí: chyba sa zapíše do logu a skúsi sa to o chvíľu znova.
+    """
+    while True:
+        try:
+            # Model a HTTP volania sú blokujúce → vo vlákne, aby server medzitým obsluhoval požiadavky
+            result = await asyncio.to_thread(services.sync)
+            if result.indexed or result.removed:
+                logger.info(
+                    "Index synchronizovaný: %s nových/zmenených, %s odstránených",
+                    result.indexed,
+                    result.removed,
+                )
+        except Exception as error:  # úloha na pozadí nesmie nikdy skončiť, preto zachytí všetko
+            logger.warning("Synchronizácia indexu zlyhala (skúsim znova): %s", error)
+        await asyncio.sleep(services.sync_interval)
 
 
 def get_services(request: Request) -> Services:
@@ -105,7 +145,13 @@ def create_app(services_factory: Callable[[Settings], Services] = build_services
         services.repository.ensure_schema()
         services.search.refresh()  # BM25 index z textov, ktoré už sú v databáze
         app.state.services = services
+
+        sync_task = asyncio.create_task(_sync_forever(services)) if services.sync_interval > 0 else None
         yield
+        if sync_task is not None:
+            sync_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await sync_task
 
     app = FastAPI(
         title="Vybavím to – AI service",
@@ -120,8 +166,7 @@ def create_app(services_factory: Callable[[Settings], Services] = build_services
 
     @app.post("/index", tags=["Semantic search"], summary="(Re)index all public listings from the main API")
     def index(services: ServicesDep) -> IndexResponse:
-        result: IndexResult = reindex(services.listings, services.embedder, services.repository)
-        services.search.refresh()
+        result = services.sync()
         return IndexResponse(indexed=result.indexed, unchanged=result.unchanged, removed=result.removed)
 
     @app.get(

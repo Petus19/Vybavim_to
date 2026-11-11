@@ -1,5 +1,6 @@
 """Indexovanie a hľadanie cez HTTP – s falošným modelom, úložiskom v pamäti a inzerátmi v pamäti."""
 
+import time
 from collections.abc import Iterator
 from dataclasses import dataclass
 from uuid import UUID
@@ -138,3 +139,39 @@ def test_similar_unknown_listing_returns_404(api: Fixture) -> None:
     response = api.client.get(f"/listings/{UUID(int=999)}/similar")
 
     assert response.status_code == 404
+
+
+def test_background_sync_indexes_new_listings_without_manual_index() -> None:
+    embedder = FakeEmbedder()
+    listings = InMemoryListings([LOGO])
+    services = Services(
+        embedder=embedder, repository=InMemoryRepository(), listings=listings, sync_interval=0.02
+    )
+
+    with TestClient(create_app(lambda _settings: services)) as client:
+        listings.documents = [LOGO, WIFI]  # v C# API pribudol inzerát; nikto nevolá POST /index
+
+        deadline = time.monotonic() + 5
+        hits: list[dict[str, object]] = []
+        while not hits and time.monotonic() < deadline:
+            time.sleep(0.05)
+            hits = client.get("/search", params={"q": "wifi sieť", "min_score": 0.3}).json()
+
+    assert [hit["listing_id"] for hit in hits] == [str(WIFI.id)]
+
+
+def test_background_sync_survives_api_outage() -> None:
+    class BrokenListings:
+        def fetch_all(self) -> list[object]:
+            raise ConnectionError("C# API nebeží")
+
+    services = Services(
+        embedder=FakeEmbedder(),
+        repository=InMemoryRepository(),
+        listings=BrokenListings(),  # type: ignore[arg-type]
+        sync_interval=0.02,
+    )
+
+    with TestClient(create_app(lambda _settings: services)) as client:
+        time.sleep(0.1)  # niekoľko neúspešných pokusov na pozadí
+        assert client.get("/health").status_code == 200
