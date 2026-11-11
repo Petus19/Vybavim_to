@@ -19,7 +19,7 @@
 - **Backend architecture** – a *modular monolith* in C# / ASP.NET Core (.NET 10): each business module owns its code, its database schema and a small public contract. Module boundaries are enforced by the compiler **and** by automated architecture tests.
 - **Domain modelling** – entities protect their own rules (factory methods, private setters, explicit state transitions); every broken rule has a stable error code and a human-readable message.
 - **A real REST API** – accent- and case-insensitive text search with filters, paging, authentication with access/refresh tokens and Google sign-in, role-based authorization, RFC 9457 error responses, OpenAPI docs.
-- **Testing and CI** – 125 automated C# tests: unit, architecture, and integration tests that run the whole API against a throw-away PostgreSQL in Docker (Testcontainers), plus 58 Python tests for the AI service. GitHub Actions builds and tests the backend, the AI service (including its Docker image) and the frontend on every pull request.
+- **Testing and CI** – 126 automated C# tests: unit, architecture, and integration tests that run the whole API against a throw-away PostgreSQL in Docker (Testcontainers), plus 58 Python tests for the AI service. GitHub Actions builds and tests the backend, the AI service (including its Docker image) and the frontend on every pull request.
 - **AI service (Python)** – a FastAPI service next to the C# API. Multilingual sentence embeddings stored in PostgreSQL with pgvector (HNSW) power semantic search and "similar listings": a query like "someone to design a company sign" finds the logo job with no words in common. **Measured, not assumed:** on a labelled set of 43 Slovak queries, recall@5 goes from **0.24** (current keyword search) to **0.86** (semantic) and **0.91** (hybrid with BM25, which can also answer "nothing relevant"); the evaluation also decided which embedding model to keep. See [`Backend/AiService`](Backend/AiService/README.md).
 - **Teamwork** – two developers, every change goes through a branch, a descriptive pull request and a green CI run. The web client consumes TypeScript types generated from the API's OpenAPI document.
 
@@ -148,7 +148,7 @@ uv run uvicorn ai_service.main:app --port 8000
 #    → http://localhost:8000/docs   (call POST /index once, then try GET /search)
 ```
 
-**Demo data:** 4 categories, 61 listings and their authors' profiles are created automatically in development. Development-only accounts are seeded as well (never created outside the Development environment):
+**Demo data:** 4 categories, 62 listings and their authors' profiles are created automatically in development. Development-only accounts are seeded as well (never created outside the Development environment):
 
 | User | Password | Role in the demo |
 |---|---|---|
@@ -158,7 +158,7 @@ uv run uvicorn ai_service.main:app --port 8000
 | `specialist2.demo` | `Demo1234` | junior web & graphic designer (cheaper competing offers) |
 | `specialist3.demo` | `Demo1234` | performance-marketing agency (Google Ads offer) |
 
-The demo accounts and the extra 49 listings (switch `DevData:DemoAccounts` in `appsettings.Development.json`) exist for the AI agent and its evaluation. You can also register a new account on the web.
+The demo accounts and the extra 50 listings (one of them carries a planted prompt-injection text for the agent's safety scenario) (switch `DevData:DemoAccounts` in `appsettings.Development.json`) exist for the AI agent and its evaluation. You can also register a new account on the web.
 
 **Google sign-in is optional** – the button appears only when `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set in `Frontend/Web/.env.local` (see `.env.example`). Everything else works without it.
 
@@ -166,7 +166,7 @@ The demo accounts and the extra 49 listings (switch `DevData:DemoAccounts` in `a
 
 ```bash
 cd Backend
-dotnet test        # 125 tests; Docker must be running (integration tests start their own PostgreSQL)
+dotnet test        # 126 tests; Docker must be running (integration tests start their own PostgreSQL)
 ```
 
 ```bash

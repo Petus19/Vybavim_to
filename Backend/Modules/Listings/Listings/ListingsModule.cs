@@ -40,7 +40,10 @@ public static class ListingsModule
         services.AddScoped<IDevDataSeeder, ListingsDevSeeder>();
         if (DevData.DemoAccountsEnabled(configuration))
         {
-            services.AddScoped<IDevDataSeeder, ListingsDemoSeeder>();   // demo účty pre AI agenta
+            // Demo dáta pre AI agenta; tá istá inštancia ich vie aj vrátiť do východiskového stavu
+            services.AddScoped<ListingsDemoSeeder>();
+            services.AddScoped<IDevDataSeeder>(sp => sp.GetRequiredService<ListingsDemoSeeder>());
+            services.AddScoped<IDevDataResetter>(sp => sp.GetRequiredService<ListingsDemoSeeder>());
         }
 
         return services;

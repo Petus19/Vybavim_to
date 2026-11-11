@@ -33,7 +33,10 @@ public static class ProjectsModule
 
         if (DevData.DemoAccountsEnabled(configuration))
         {
-            services.AddScoped<IDevDataSeeder, ProjectsDemoSeeder>();   // ponuky pre demo účty AI agenta
+            // Ponuky pre demo účty AI agenta; tá istá inštancia ich vie aj vrátiť do východiskového stavu
+            services.AddScoped<ProjectsDemoSeeder>();
+            services.AddScoped<IDevDataSeeder>(sp => sp.GetRequiredService<ProjectsDemoSeeder>());
+            services.AddScoped<IDevDataResetter>(sp => sp.GetRequiredService<ProjectsDemoSeeder>());
         }
 
         return services;

@@ -11,7 +11,7 @@ namespace Vybavim.Modules.Projects.Infrastructure.Seeding;
 /// a IdentityDemoSeeder (modul Projects nečíta tabuľky iných modulov) – overuje to test DemoDataTests.
 /// Registruje sa iba vo vývoji so zapnutým <see cref="DevData.DemoAccountsKey"/>.
 /// </summary>
-internal sealed class ProjectsDemoSeeder(ProjectsDbContext db) : IDevDataSeeder
+internal sealed class ProjectsDemoSeeder(ProjectsDbContext db) : IDevDataSeeder, IDevDataResetter
 {
     private static readonly Guid LogoRedesignListing = Guid.Parse("019a0b2c-4000-7000-8000-000000000001");
     private static readonly Guid GoogleAdsListing = Guid.Parse("019a0b2c-4000-7000-8000-000000000002");
@@ -19,6 +19,23 @@ internal sealed class ProjectsDemoSeeder(ProjectsDbContext db) : IDevDataSeeder
     private static readonly Guid LuciaBartosova = Guid.Parse("019a0b2c-3000-7000-8000-000000000002");
     private static readonly Guid MarekHruska = Guid.Parse("019a0b2c-3000-7000-8000-000000000003");
     private static readonly Guid KlikMarketing = Guid.Parse("019a0b2c-3000-7000-8000-000000000004");
+    private static readonly Guid PrinterListing = Guid.Parse("019a0b2c-4000-7000-8000-000000000003");
+
+    private static readonly Guid[] DemoFreelancers = [LuciaBartosova, MarekHruska, KlikMarketing];
+    private static readonly Guid[] DemoListings = [LogoRedesignListing, GoogleAdsListing, PrinterListing];
+
+    /// <summary>
+    /// Východiskový stav: zmaže všetky ponuky demo špecialistov a ponuky na demo inzeráty
+    /// (vrátane prijatých a odmietnutých) a vloží pôvodné štyri čakajúce ponuky.
+    /// </summary>
+    public async Task ResetAsync(CancellationToken cancellationToken = default)
+    {
+        await db.Offers
+            .Where(o => DemoFreelancers.Contains(o.FreelancerId) || DemoListings.Contains(o.ListingId))
+            .ExecuteDeleteAsync(cancellationToken);
+
+        await SeedAsync(cancellationToken);
+    }
 
     public async Task SeedAsync(CancellationToken cancellationToken = default)
     {

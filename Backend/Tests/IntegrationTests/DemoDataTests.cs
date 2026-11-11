@@ -24,6 +24,8 @@ public sealed class DemoDataTests(DemoApiFactory factory) : IClassFixture<DemoAp
 {
     private const string LogoRedesignListing = "019a0b2c-4000-7000-8000-000000000001";
 
+    private static readonly string[] Skills = ["Logo"];
+
     private readonly HttpClient _client = factory.CreateClient();
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
@@ -54,7 +56,7 @@ public sealed class DemoDataTests(DemoApiFactory factory) : IClassFixture<DemoAp
     {
         var page = await GetAsync("/api/v1/listings?pageSize=1");
 
-        Assert.Equal(61, page.GetProperty("total").GetInt32());   // 12 pôvodných + 49 demo
+        Assert.Equal(62, page.GetProperty("total").GetInt32());   // 12 pôvodných + 50 demo
     }
 
     [Fact]
@@ -103,5 +105,62 @@ public sealed class DemoDataTests(DemoApiFactory factory) : IClassFixture<DemoAp
         var offers = await GetAsync("/api/v1/offers/mine", token);
 
         Assert.Equal(expected, offers.GetArrayLength());
+    }
+
+    [Fact]
+    public async Task Reset_RestoresInitialStateAfterWrites()
+    {
+        var client = await LoginAsync("client.demo");
+        var specialist = await LoginAsync("specialist3.demo");
+
+        // Zadávateľ pridá inzerát, špecialista naň pošle ponuku a zadávateľ prijme ponuku na redizajn loga
+        var created = await PostAsync("/api/v1/listings", client, new
+        {
+            category = "grafika",
+            title = "Dočasný inzerát z testu",
+            description = "Tento inzerát má po obnove demo dát zmiznúť.",
+            budget = new { type = "fixed", amount = 100 },
+            city = "Košice",
+            remote = true,
+            deadline = (string?)null,
+            level = "beginner",
+            scope = new { size = "small", duration = "do 1 týždňa" },
+            engagement = "one_time",
+            invoiceRequired = false,
+            skills = Skills,
+            deliverables = Array.Empty<string>(),
+            requirements = Array.Empty<string>(),
+        });
+        var newListingId = created.GetProperty("id").GetString();
+        await PostAsync($"/api/v1/listings/{newListingId}/offers", specialist, new { price = 90, deliveryDays = 5, message = "Ponuka z testu." });
+        var offers = await GetAsync($"/api/v1/listings/{LogoRedesignListing}/offers", client);
+        await PostAsync($"/api/v1/offers/{offers[0].GetProperty("id").GetString()}/accept", client, null);
+
+        var reset = await _client.PostAsync(new Uri("/api/v1/dev/reset-demo-data", UriKind.Relative), null, Ct);
+        Assert.Equal(HttpStatusCode.NoContent, reset.StatusCode);
+
+        var mine = await GetAsync("/api/v1/listings/mine", client);
+        Assert.Equal(3, mine.GetProperty("total").GetInt32());
+        Assert.All(mine.GetProperty("items").EnumerateArray(), item => Assert.Equal("open", item.GetProperty("status").GetString()));
+
+        var restored = await GetAsync($"/api/v1/listings/{LogoRedesignListing}/offers", client);
+        Assert.Equal(2, restored.GetArrayLength());
+        Assert.All(restored.EnumerateArray(), o => Assert.Equal("pending", o.GetProperty("status").GetString()));
+
+        Assert.Equal(1, (await GetAsync("/api/v1/offers/mine", specialist)).GetArrayLength());
+    }
+
+    private async Task<JsonElement> PostAsync(string url, string token, object? body)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, new Uri(url, UriKind.Relative));
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        if (body is not null)
+        {
+            request.Content = JsonContent.Create(body);
+        }
+
+        var response = await _client.SendAsync(request, Ct);
+        Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync(Ct));
+        return await response.Content.ReadFromJsonAsync<JsonElement>(Ct);
     }
 }
