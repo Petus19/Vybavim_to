@@ -40,3 +40,7 @@ class AgentSettings(BaseSettings):
     max_steps: int = 8  # najviac toľko volaní modelu na jednu požiadavku používateľa
     request_timeout: float = 30.0  # sekundy na jedno HTTP volanie API
     llm_timeout: float = 180.0  # sekundy na jednu odpoveď modelu (lokálny model býva pomalší)
+
+    # Webový chat (POST /agent/chat): ako dlho čaká zápis na „Potvrdiť“ a ako dlho sa pamätá konverzácia
+    confirm_timeout: float = 300.0  # 5 minút; potom sa akcia berie ako nepotvrdená
+    conversation_ttl: float = 1800.0  # 30 minút bez správy → konverzácia sa zabudne

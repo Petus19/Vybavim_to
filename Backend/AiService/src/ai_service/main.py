@@ -13,6 +13,7 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from ai_service import __version__
+from ai_service.agent.web import AgentHub, agent_router, build_agent_hub
 from ai_service.config import Settings, get_settings
 from ai_service.embeddings import Embedder, SentenceTransformerEmbedder
 from ai_service.hybrid import DEFAULT_MIN_SCORE, HybridHit, HybridSearch
@@ -135,7 +136,10 @@ class SearchHit(BaseModel):
         )
 
 
-def create_app(services_factory: Callable[[Settings], Services] = build_services) -> FastAPI:
+def create_app(
+    services_factory: Callable[[Settings], Services] = build_services,
+    agent_hub_factory: Callable[[], AgentHub] = build_agent_hub,
+) -> FastAPI:
     """Továreň na aplikáciu – testy si tak vedia vytvoriť vlastnú inštanciu s falošnými službami."""
 
     @asynccontextmanager
@@ -145,6 +149,8 @@ def create_app(services_factory: Callable[[Settings], Services] = build_services
         services.repository.ensure_schema()
         services.search.refresh()  # BM25 index z textov, ktoré už sú v databáze
         app.state.services = services
+        # Agent pre webový chat – model sa načíta až pri prvej správe
+        app.state.agent_hub = agent_hub_factory()
 
         sync_task = asyncio.create_task(_sync_forever(services)) if services.sync_interval > 0 else None
         yield
@@ -152,6 +158,7 @@ def create_app(services_factory: Callable[[Settings], Services] = build_services
             sync_task.cancel()
             with suppress(asyncio.CancelledError):
                 await sync_task
+        app.state.agent_hub.close()
 
     app = FastAPI(
         title="Vybavím to – AI service",
@@ -202,6 +209,7 @@ def create_app(services_factory: Callable[[Settings], Services] = build_services
             raise HTTPException(status_code=404, detail="Listing is not indexed.")
         return [SimilarHit.from_hit(h) for h in hits]
 
+    app.include_router(agent_router())
     return app
 
 

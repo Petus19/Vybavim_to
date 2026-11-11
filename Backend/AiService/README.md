@@ -10,7 +10,8 @@ A separate **Python (FastAPI)** service for the AI features of Vybavím to – s
 | 3b – Hybrid search | `/search` serves BM25 + embeddings (Reciprocal Rank Fusion) with a minimum score, so it can say "nothing relevant" | ✅ |
 | 4 – AI agent | the agent calls the REST API as tools, human confirmation before every write, switchable model provider (local Ollama / Claude), evaluation on 24 scenarios | ✅ |
 | 5 – Trained model | scikit-learn classifier on embeddings that suggests a listing category; train/test split, F1, confusion matrix | next |
-| 6 – Integration | the C# API and the web call the service (search box, "similar listings", the agent in the web app); the main app keeps working when it is down | planned |
+| 4b – Agent for the web | `POST /agent/chat` streams the agent's steps (Server-Sent Events), `POST /agent/confirm` approves a write; confirmation bound to the user, expires after 5 minutes | ✅ |
+| 6 – Integration | the C# API and the web call the service (search box, "similar listings"); the main app keeps working when it is down | planned |
 
 ## Stack
 
@@ -154,6 +155,29 @@ uv run python -m ai_service.agent --as specialist   # Lucia Bartošová (special
 
 Every tool call and its result is printed, write actions show a yellow preview with `Potvrdiť? [y/N]`, and each answer ends with model calls, tokens, estimated cost and time.
 
+### The agent for the web app (`POST /agent/chat`, `POST /agent/confirm`)
+
+The same agent loop, over HTTP for the chat in the web app (`agent/web.py`). The web server (Next.js) calls it with the signed-in user's access token – the token stays out of the browser's JavaScript and the AI service only forwards it to the C# API (who the user is comes from `GET /api/v1/auth/me`).
+
+```
+POST /agent/chat  { "message": "…", "role": "client" | "specialist", "conversation_id": null }
+→ text/event-stream, one event per step:
+  start                  { conversation_id, provider }
+  thinking               { step }                         the model is working
+  tool_call              { tool, summary }                "Hľadám inzeráty: logo, do 300 €"
+  confirmation_required  { confirmation_id, title, preview, expires_in }
+  confirmation_result    { confirmation_id, approved }    (or confirmation_expired)
+  tool_result            { tool, ok, summary, url? }      url = the created listing / offer in the web app
+  message                { text, stop_reason, stats }     answered | step_limit | llm_error; calls, tokens, cost, time
+  error                  { message }
+
+POST /agent/confirm  { "confirmation_id": "…", "approved": true | false }  → 204
+```
+
+- **Why two requests:** in the terminal the loop simply waits on `input("y/N")`. A web request cannot wait for a click, so the run is **paused**: it runs in its own thread, which stops at the confirmation, and the stream stays open until `POST /agent/confirm` (or the timeout) decides.
+- **Only the same user can confirm**, only within **5 minutes** (`AGENT_CONFIRM_TIMEOUT`); then the action counts as declined. Unknown, expired, already decided and other users' confirmations all return the same `404`, so an ID reveals nothing. If the browser disconnects, the pending confirmation is declined – nothing is written without a click.
+- **Conversations** are kept in memory per user (follow-up questions work like in the terminal) and forgotten after 30 idle minutes; another user's `conversation_id` returns `404`, a second message while the agent is still working `409`. One server process is enough for the demo; several would need shared storage (Redis).
+
 ### Agent evaluation
 
 ```bash
@@ -227,6 +251,7 @@ uv run ruff format .    # format code
 | `test_agent_tools.py`, `test_agent_write_tools.py` | read and write tools over a fake API: listing by title, offer by specialist name, ambiguity, filters, previews, declined confirmation writes nothing |
 | `test_agent_clients.py`, `test_agent_anthropic.py` | Ollama and Claude message mapping, token usage and cost, refusals; C# API errors and the one-time token refresh (mocked HTTP) |
 | `test_agent_eval.py` | the evaluation checks fail when they should (wrong category, wrong listing, unexpected write, invented listing), scenario file guards, report |
+| `test_agent_web.py` | `/agent/chat` and `/agent/confirm`: event order, approved write runs and links to the result, declined and **expired** confirmations write nothing, **another user cannot confirm** or continue a conversation, browser disconnect declines, missing token `401`, busy `409` |
 | `test_agent_stack.py` | the whole chain against the running C# API and AI service with a scripted model (`-m stack`) |
 
 The same checks (without the `model` and `stack` tests) and a Docker build run in CI on every pull request.
@@ -264,6 +289,7 @@ The agent reads `AGENT_` variables (same `.env`):
 | `AGENT_OLLAMA_NUM_CTX` | `8192` | local context size (Ollama's default 4,096 silently cuts the start of long conversations) |
 | `AGENT_API_BASE_URL`, `AGENT_AI_SERVICE_URL`, `AGENT_WEB_BASE_URL` | local addresses | the C# API, the AI service and links to the web app |
 | `AGENT_MAX_STEPS` | `8` | model calls per request |
+| `AGENT_CONFIRM_TIMEOUT`, `AGENT_CONVERSATION_TTL` | `300`, `1800` | web chat: seconds a write waits for confirmation; idle seconds before a conversation is forgotten |
 
 ## Layout
 
@@ -291,6 +317,8 @@ AiService/
       marketplace.py      HTTP clients: C# API with the user's token, hybrid search
       pricing.py          cost estimate from token usage
       eval/               scenarios.yaml, state checks through the API, runner, report, results
+      describe.py         steps in Slovak for people ("Hľadám inzeráty: …") – terminal and web
+      web.py              POST /agent/chat (SSE) and /agent/confirm: paused runs, confirmations, conversations
       __main__.py         terminal chat (python -m ai_service.agent)
   tests/                  pytest; fakes.py = fake model, storage and listings for fast API tests
   Dockerfile
