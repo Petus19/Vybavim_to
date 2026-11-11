@@ -141,3 +141,29 @@ def test_cancelled_listing_is_ignored_when_resolving_by_title(api: FakeApi) -> N
 
     assert not is_error
     assert data["listing_title"] == "Redizajn starého loga autoservisu"  # nie „nejednoznačné“
+
+
+def test_search_marks_listings_where_i_already_offered() -> None:
+    api = FakeApi(
+        {
+            "/api/v1/listings/a": detail("a", "Logo pre kaviareň", 300),
+            "/api/v1/listings/b": detail("b", "Redizajn loga", 300),
+            "/api/v1/offers/mine": [{"listingId": "b", "status": "pending"}],
+        }
+    )
+
+    data, _ = run(api, "search_listings", FakeSearch(["a", "b"]), query="logo")
+
+    flags = {r["title"]: r.get("already_offered", False) for r in data["results"]}
+    assert flags == {"Logo pre kaviareň": False, "Redizajn loga": True}
+    assert "already_offered" in data["note"]
+
+
+def test_all_received_offers_include_total(api: FakeApi) -> None:
+    api.routes[f"/api/v1/listings/{ADS_ID}/offers"] = []
+    for item in MINE["items"]:
+        item["status"] = "open"
+
+    data, _ = run(api, "get_offers_on_listing")
+
+    assert data["total_offers"] == 1

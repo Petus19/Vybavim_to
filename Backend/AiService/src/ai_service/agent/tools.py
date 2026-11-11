@@ -70,7 +70,10 @@ class CreateListingInput(BaseModel):
 
 
 class SendOfferInput(BaseModel):
-    listing_id: UUID = Field(description="ID inzerátu z výsledkov hľadania.")
+    listing: str = Field(
+        min_length=1,
+        description="Inzerát: ID z výsledkov hľadania ALEBO jeho názov či časť názvu (napr. 'Etikety').",
+    )
     price: float = Field(gt=0, description="Cena ponuky v €.")
     delivery_days: int = Field(ge=1, le=365, description="Za koľko dní prácu dodáš.")
     message: str = Field(
@@ -79,8 +82,15 @@ class SendOfferInput(BaseModel):
     )
 
 
-class OfferIdInput(BaseModel):
-    offer_id: UUID = Field(description="ID ponuky z get_offers_on_listing.")
+class OfferRefInput(BaseModel):
+    offer: str = Field(
+        min_length=1,
+        description="Ponuka na môj inzerát: jej ID ALEBO meno špecialistu, ktorý ju poslal (napr. 'Lucia').",
+    )
+    listing: str | None = Field(
+        None,
+        description="Časť názvu môjho inzerátu – iba ak ten istý špecialista ponúkol na viac inzerátov.",
+    )
 
 
 class MyListingInput(BaseModel):
@@ -311,6 +321,17 @@ def build_read_tools(api: MarketplaceClient, search: SearchClient) -> list[Tool]
                 "results": [],
                 "note": "Nič relevantné sa nenašlo. Nevymýšľaj inzeráty, povedz to používateľovi.",
             }
+        # Kde už mám ponuku, druhú poslať nejde (API vráti 409) – model to musí vedieť vopred
+        try:
+            mine = api.get("/api/v1/offers/mine")
+        except ApiError:
+            mine = []  # označenie je pomôcka – keď sa nepodarí, výsledky hľadania aj tak platia
+        offered = {o["listingId"] for o in mine if o["status"] in {"pending", "accepted"}}
+        for result in results:
+            if result["id"] in offered:
+                result["already_offered"] = True
+        if any(r.get("already_offered") for r in results):
+            return {"results": results, "note": "Na inzeráty s already_offered už ponuku máš – vyber iný."}
         return {"results": results}
 
     def get_listing(args: ListingIdInput) -> dict[str, Any]:
@@ -373,7 +394,7 @@ def build_read_tools(api: MarketplaceClient, search: SearchClient) -> list[Tool]
             ]
             if not groups:
                 return {"listings": [], "note": "Na tvoje inzeráty zatiaľ neprišli žiadne ponuky."}
-            return {"listings": groups}
+            return {"total_offers": sum(len(g["offers"]) for g in groups), "listings": groups}
 
         listing = resolve_my_listing(api, args.listing or "")
         if isinstance(listing, Ambiguous):
@@ -458,22 +479,106 @@ def _passes_filters(detail: dict[str, Any], args: SearchListingsInput) -> bool:
 # --- Zapisovacie nástroje (každý s náhľadom pre potvrdenie človekom) ---
 
 
-def _find_my_offer(api: MarketplaceClient, offer_id: UUID) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    """Ponuka na niektorý z MOJICH inzerátov + ostatné ponuky na ten istý inzerát (pre náhľad prijatia)."""
-    for listing in api.get("/api/v1/listings/mine", pageSize=50)["items"]:
-        offers = api.get(f"/api/v1/listings/{listing['id']}/offers")
-        for offer in offers:
-            if offer["id"] == str(offer_id):
-                return offer, [o for o in offers if o["id"] != offer["id"]]
+def _as_uuid(value: str) -> str | None:
+    try:
+        return str(UUID(value.strip()))
+    except ValueError:
+        return None
+
+
+def _best_by_words(
+    items: list[dict[str, Any]], reference: str, text: Callable[[dict[str, Any]], str]
+) -> list[dict[str, Any]]:
+    """Položky, ktorých text zdieľa najviac slov s odkazom (rovnaké delenie na slová ako BM25)."""
+    wanted = set(terms(reference))
+    scored = [(len(wanted & set(terms(text(item)))), item) for item in items]
+    best = max((score for score, _ in scored), default=0)
+    return [item for score, item in scored if score == best and score > 0]
+
+
+def _offer_label(offer: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "offer_id": offer["id"],
+        "specialist": (offer.get("freelancer") or {}).get("displayName"),
+        "listing_title": offer.get("listingTitle"),
+        "status": offer["status"],
+    }
+
+
+def _find_my_offer(
+    api: MarketplaceClient, reference: str, listing: str | None = None
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Ponuka na MÔJ inzerát podľa ID alebo mena špecialistu + ostatné ponuky na ten istý inzerát.
+
+    Hľadá iba v ponukách na moje inzeráty – cudzie nevidí. Model nemusí najprv zisťovať ID ponuky:
+    „prijmi ponuku od Lucie“ = jeden krok.
+    """
+    by_listing: dict[str, list[dict[str, Any]]] = {}
+    for item in api.get("/api/v1/listings/mine", pageSize=50)["items"]:
+        if item.get("status") != "cancelled":
+            by_listing[item["id"]] = api.get(f"/api/v1/listings/{item['id']}/offers")
+    offers = [offer for group in by_listing.values() for offer in group]
+
+    wanted_id = _as_uuid(reference)
+    if wanted_id is not None:
+        matches = [offer for offer in offers if offer["id"] == wanted_id]
+    else:
+        candidates = offers
+        if listing:
+            candidates = _best_by_words(offers, listing, lambda o: o.get("listingTitle") or "") or offers
+        matches = _best_by_words(
+            candidates, reference, lambda o: (o.get("freelancer") or {}).get("displayName") or ""
+        )
+        pending = [offer for offer in matches if offer["status"] == "pending"]
+        matches = pending or matches  # rozhodovať sa dá iba o čakajúcej ponuke
+
+    if len(matches) == 1:
+        offer = matches[0]
+        return offer, [o for o in by_listing[offer["listingId"]] if o["id"] != offer["id"]]
+    if not matches:
+        raise ToolError(
+            {
+                "error": "offer_not_found",
+                "message": f"Ponuku '{reference}' na tvoje inzeráty nevidím.",
+                "my_offers": [_offer_label(o) for o in offers],
+            }
+        )
     raise ToolError(
         {
-            "error": "offer_not_found",
-            "message": "Takú ponuku na tvoje inzeráty nevidím. Najprv zavolaj get_offers_on_listing.",
+            "error": "ambiguous_offer",
+            "message": "Zodpovedá tomu viac ponúk – zopakuj volanie s parametrom listing alebo sa spýtaj.",
+            "candidates": [_offer_label(o) for o in matches],
         }
     )
 
 
-def build_write_tools(api: MarketplaceClient, web_base_url: str) -> list[Tool]:
+def _find_listing_for_offer(api: MarketplaceClient, search: SearchClient, reference: str) -> dict[str, Any]:
+    """Inzerát pre ponuku podľa ID alebo názvu (hybridné hľadanie + zhoda slov v názve)."""
+    wanted_id = _as_uuid(reference)
+    if wanted_id is not None:
+        return api.get(f"/api/v1/listings/{wanted_id}")
+    details = [api.get(f"/api/v1/listings/{hit['listing_id']}") for hit in search.search(reference, 10)]
+    open_listings = [d for d in details if d["status"] == "open"]
+    matches = _best_by_words(open_listings, reference, lambda d: d["title"])
+    if len(matches) == 1:
+        return matches[0]
+    if not matches:
+        raise ToolError(
+            {
+                "error": "listing_not_found",
+                "message": f"Otvorený inzerát '{reference}' som nenašiel. Použi search_listings.",
+            }
+        )
+    raise ToolError(
+        {
+            "error": "ambiguous_listing",
+            "message": "Názvu zodpovedá viac inzerátov – spýtaj sa používateľa alebo použi ID.",
+            "candidates": [{"id": d["id"], "title": d["title"]} for d in matches],
+        }
+    )
+
+
+def build_write_tools(api: MarketplaceClient, search: SearchClient, web_base_url: str) -> list[Tool]:
     def listing_url(listing_id: str) -> str:
         return f"{web_base_url}/inzeraty/{listing_id}"
 
@@ -522,7 +627,7 @@ def build_write_tools(api: MarketplaceClient, web_base_url: str) -> list[Tool]:
         }
 
     def preview_send_offer(args: SendOfferInput) -> str:
-        listing = api.get(f"/api/v1/listings/{args.listing_id}")
+        listing = _find_listing_for_offer(api, search, args.listing)
         owner = (listing.get("owner") or {}).get("displayName") or "neznámy zadávateľ"
         budget = _budget(listing["budget"])
         return "\n".join(
@@ -535,14 +640,20 @@ def build_write_tools(api: MarketplaceClient, web_base_url: str) -> list[Tool]:
         )
 
     def send_offer(args: SendOfferInput) -> dict[str, Any]:
+        listing = _find_listing_for_offer(api, search, args.listing)
         offer = api.post(
-            f"/api/v1/listings/{args.listing_id}/offers",
+            f"/api/v1/listings/{listing['id']}/offers",
             {"price": args.price, "deliveryDays": args.delivery_days, "message": args.message},
         )
-        return {"status": "sent", "offer_id": offer["id"], "url": listing_url(str(args.listing_id))}
+        return {
+            "status": "sent",
+            "offer_id": offer["id"],
+            "listing_title": listing["title"],
+            "url": listing_url(listing["id"]),
+        }
 
-    def preview_accept_offer(args: OfferIdInput) -> str:
-        offer, others = _find_my_offer(api, args.offer_id)
+    def preview_accept_offer(args: OfferRefInput) -> str:
+        offer, others = _find_my_offer(api, args.offer, args.listing)
         pending = [o for o in others if o["status"] == "pending"]
         name = (offer.get("freelancer") or {}).get("displayName") or "špecialista"
         lines = [
@@ -556,17 +667,19 @@ def build_write_tools(api: MarketplaceClient, web_base_url: str) -> list[Tool]:
         lines.append("  Prijatie sa nedá vrátiť späť.")
         return "\n".join(lines)
 
-    def accept_offer(args: OfferIdInput) -> dict[str, Any]:
-        offer = api.post(f"/api/v1/offers/{args.offer_id}/accept")
+    def accept_offer(args: OfferRefInput) -> dict[str, Any]:
+        offer_id = _find_my_offer(api, args.offer, args.listing)[0]["id"]
+        offer = api.post(f"/api/v1/offers/{offer_id}/accept")
         return {"status": "accepted", "offer": _offer(offer), "url": listing_url(offer["listingId"])}
 
-    def preview_reject_offer(args: OfferIdInput) -> str:
-        offer, _ = _find_my_offer(api, args.offer_id)
+    def preview_reject_offer(args: OfferRefInput) -> str:
+        offer, _ = _find_my_offer(api, args.offer, args.listing)
         name = (offer.get("freelancer") or {}).get("displayName") or "špecialista"
         return f"Odmietnuť ponuku od {name} ({offer['price']:g} €) na „{offer.get('listingTitle')}“."
 
-    def reject_offer(args: OfferIdInput) -> dict[str, Any]:
-        offer = api.post(f"/api/v1/offers/{args.offer_id}/reject")
+    def reject_offer(args: OfferRefInput) -> dict[str, Any]:
+        offer_id = _find_my_offer(api, args.offer, args.listing)[0]["id"]
+        offer = api.post(f"/api/v1/offers/{offer_id}/reject")
         return {"status": "rejected", "offer": _offer(offer)}
 
     def tool(
@@ -597,14 +710,14 @@ def build_write_tools(api: MarketplaceClient, web_base_url: str) -> list[Tool]:
         tool(
             "accept_offer",
             "Prijme ponuku na môj inzerát; ostatné čakajúce ponuky sa odmietnu." + confirm_note,
-            OfferIdInput,
+            OfferRefInput,
             accept_offer,
             preview_accept_offer,
         ),
         tool(
             "reject_offer",
             "Odmietne ponuku na môj inzerát." + confirm_note,
-            OfferIdInput,
+            OfferRefInput,
             reject_offer,
             preview_reject_offer,
         ),

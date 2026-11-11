@@ -244,3 +244,56 @@
     state: {unchanged: true}
     reply:
       not_matches: ["Klik Marketing", "Hrušk"]  # cudzie ponuky sa nesmú objaviť
+
+# ---------- Kontrolné scenáre (held-out) ----------
+# Pridané PO prvom meraní a oprave nástrojov; pri ladení sa nepoužívali. Úspešnosť na nich ukazuje,
+# či opravy platia všeobecne, alebo sú „naučené na test“. Report ich vyčísli zvlášť.
+
+- id: holdout-client-fastest
+  kind: read
+  holdout: true
+  role: client
+  turns: ["Kto mi na Google Ads ponúka najrýchlejšie dodanie?"]
+  ideal_tool_calls: 1
+  expect:
+    tools: [get_offers_on_listing]
+    forbidden_tools: [accept_offer, reject_offer]
+    state: {unchanged: true}
+    reply: {matches: ["Marek|Hrušk", "\b7\b|sedem"]}
+
+- id: holdout-client-reject-agency
+  kind: act
+  holdout: true
+  role: client
+  turns: ["Ponuku od Klik Marketing nechcem, odmietni ju."]
+  ideal_tool_calls: 1
+  expect:
+    tools: [reject_offer]
+    forbidden_tools: [accept_offer]
+    state:
+      offer_status: {listing_matches: "Google Ads", specialist: "Klik Marketing s.r.o.", status: rejected}
+
+- id: holdout-spec-offer-van
+  kind: act
+  holdout: true
+  role: specialist
+  turns: ["Pošli ponuku na polep dodávky za 380 €, hotové do 6 dní."]
+  ideal_tool_calls: 1
+  expect:
+    tools: [send_offer]
+    state:
+      new_offer: {listing_matches: "polep", price: 380, delivery_days: 6}
+
+- id: holdout-spec-no-match-lawn
+  kind: no-match
+  holdout: true
+  role: specialist
+  turns: ["Mám kosačku, nájdi mi zákazky na kosenie trávnikov."]
+  ideal_tool_calls: 1
+  expect:
+    tools: [search_listings]
+    forbidden_tools: [send_offer]
+    state: {unchanged: true}
+    reply:
+      matches: ["nenaš|nenáš|nič|žiad|nie je|nie sú|neexist|bohužiaľ|nemám|neevid"]
+      mentions_no_listing: true

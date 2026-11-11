@@ -65,6 +65,7 @@ class Scenario(Strict):
     role: Role
     turns: tuple[str, ...] = Field(min_length=1)
     confirm: bool = True
+    holdout: bool = False  # kontrolný scenár – pridaný po ladení, pri ladení sa nepoužíval
     ideal_tool_calls: int = Field(ge=0)
     expect: Expectation
 

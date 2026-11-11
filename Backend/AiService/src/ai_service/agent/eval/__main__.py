@@ -9,8 +9,9 @@ import sys
 
 from ai_service.agent.config import AgentSettings
 from ai_service.agent.eval.report import write_report
-from ai_service.agent.eval.runner import RESULTS_DIR, RunRecord, run_evaluation
+from ai_service.agent.eval.runner import RESULTS_DIR, RunRecord, rescore, run_evaluation
 from ai_service.agent.eval.scenarios import load_scenarios
+from ai_service.agent.eval.world import World
 from ai_service.agent.llm import LLMError
 from ai_service.agent.providers import create_provider
 
@@ -28,10 +29,21 @@ def main() -> None:
         "--no-workflows", action="store_true", help="prompt without workflow hints (ablation)"
     )
     parser.add_argument("--report-only", action="store_true", help="only rebuild results.md from saved runs")
+    parser.add_argument(
+        "--rescore", action="store_true", help="re-apply reply checks to saved runs (after fixing a check)"
+    )
     args = parser.parse_args()
 
     if args.report_only:
         print(f"Report: {write_report(RESULTS_DIR)}")
+        return
+    if args.rescore:
+        world = World(AgentSettings())
+        changed = rescore(RESULTS_DIR, load_scenarios(), world.public_titles())
+        world.close()
+        print(
+            f"Prepočítané odpovede, zmenený výsledok: {changed} záznamov. Report: {write_report(RESULTS_DIR)}"
+        )
         return
 
     overrides: dict[str, object] = {"anthropic_fallbacks": False}  # výsledok má patriť meranému modelu

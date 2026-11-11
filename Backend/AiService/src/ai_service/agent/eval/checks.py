@@ -106,9 +106,16 @@ def _offer_problems(offer: dict[str, Any], want: dict[str, Any]) -> list[str]:
     return problems
 
 
+# Doplňujúca otázka nemusí mať otáznik: „Upresnite, prosím, čo potrebujete.“ je tiež otázka na používateľa
+CLARIFYING = r"\?|upresn|spresn|uve[dď]te|napíšte|povedzte|dajte vedieť|potrebujem vedieť|potrebujem od vás"
+
+# Podľa začiatku textu chyby vieme, ktorá kontrola ju vyrobila (na prepočet uložených výsledkov)
+REPLY_FAILURE_PREFIXES = ("nepoložil", "v odpovedi", "ponúkol")
+
+
 def check_reply(expected: ExpectedReply, reply: str, public_titles: Sequence[str]) -> list[str]:
     failures = []
-    if expected.asks_question and "?" not in reply:
+    if expected.asks_question and not _found(CLARIFYING, reply):
         failures.append("nepoložil doplňujúcu otázku")
     failures += [f"v odpovedi chýba /{p}/" for p in expected.matches if not _found(p, reply)]
     failures += [f"v odpovedi nemá byť /{p}/" for p in expected.not_matches if _found(p, reply)]

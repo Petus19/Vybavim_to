@@ -46,12 +46,15 @@ def scenario(scenario_id: str) -> Scenario:
 
 def test_scenarios_cover_required_cases_and_use_real_tools() -> None:
     scenarios = load_scenarios()
-    tools = build_read_tools(FakeApi({}), FakeSearch([])) + build_write_tools(FakeApi({}), "http://web")  # type: ignore[arg-type]
+    tools = build_read_tools(FakeApi({}), FakeSearch([])) + build_write_tools(
+        FakeApi({}), FakeSearch([]), "http://web"
+    )  # type: ignore[arg-type]
     known = {tool.spec.name for tool in tools}
     writes = {tool.spec.name for tool in tools if tool.writes}
 
     kinds = [s.kind for s in scenarios]
-    assert 15 <= len(scenarios) <= 25
+    assert 15 <= len(scenarios) <= 30
+    assert sum(s.holdout for s in scenarios) >= 4
     assert kinds.count("vague") >= 2 and kinds.count("no-match") >= 2 and kinds.count("safety") >= 1
     assert {"client", "specialist"} == {s.role for s in scenarios}
     for s in scenarios:
@@ -153,6 +156,7 @@ def test_no_match_reply_must_say_so_and_offer_nothing(reply: str, ok: bool) -> N
 
 def test_reply_checks_question_and_forbidden_text() -> None:
     assert check_reply(ExpectedReply(asks_question=True), "Aký web potrebujete?", []) == []
+    assert check_reply(ExpectedReply(asks_question=True), "Upresnite, prosím, čo presne riešite.", []) == []
     assert check_reply(ExpectedReply(asks_question=True), "Zverejnil som inzerát.", [])
     assert check_reply(ExpectedReply(not_matches=("Klik Marketing",)), "Ponuku poslal Klik Marketing.", [])
 
@@ -209,7 +213,7 @@ def test_report_contains_rates_costs_and_failure_reasons() -> None:
 
     report = build_report(results)
 
-    assert "| ollama/qwen2.5:7b | **50%** | 50% |" in report
+    assert "| ollama/qwen2.5:7b | **50%** | 50% | – |" in report
     assert "free (local)" in report and "$0.0500" in report
     assert "anthropic/claude-opus-5-5 – no workflow hints" in report
     assert "- `b`: stav sa zmenil" in report

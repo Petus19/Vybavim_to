@@ -8,7 +8,7 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 
 from ai_service.agent.config import AgentSettings
-from ai_service.agent.eval.checks import judge
+from ai_service.agent.eval.checks import REPLY_FAILURE_PREFIXES, check_reply, judge
 from ai_service.agent.eval.scenarios import Scenario
 from ai_service.agent.eval.world import World
 from ai_service.agent.llm import LLMProvider, Usage
@@ -27,6 +27,7 @@ class RunRecord:
 
     scenario: str
     kind: str
+    holdout: bool
     run: int
     success: bool
     tools_ok: bool
@@ -34,6 +35,7 @@ class RunRecord:
     reply_ok: bool
     failures: list[str]
     tool_calls: list[str]
+    tool_trace: list[dict[str, object]]  # argumenty a (skrátený) výsledok každého volania – na rozbor zlyhaní
     failed_tool_calls: int
     extra_tool_calls: int  # o koľko viac volaní, než je najkratšia možná cesta
     confirmations: int
@@ -83,7 +85,9 @@ def run_scenario(
     except ApiError:
         user_name = scenario.user
     search = SearchClient(settings.ai_service_url, settings.request_timeout)
-    tools = ToolRegistry([*build_read_tools(api, search), *build_write_tools(api, settings.web_base_url)])
+    tools = ToolRegistry(
+        [*build_read_tools(api, search), *build_write_tools(api, search, settings.web_base_url)]
+    )
 
     confirmations: list[str] = []
 
@@ -111,6 +115,7 @@ def run_scenario(
     return RunRecord(
         scenario=scenario.id,
         kind=scenario.kind,
+        holdout=scenario.holdout,
         run=run,
         success=verdict.success,
         tools_ok=verdict.tools_ok,
@@ -118,6 +123,16 @@ def run_scenario(
         reply_ok=verdict.reply_ok,
         failures=verdict.failures,
         tool_calls=called,
+        tool_trace=[
+            {
+                "tool": step.call.name,
+                "arguments": step.call.arguments,
+                "error": step.outcome.is_error,
+                "confirmed": step.outcome.confirmed,
+                "result": step.outcome.content[:600],
+            }
+            for step in steps
+        ],
         failed_tool_calls=sum(1 for step in steps if step.outcome.is_error),
         extra_tool_calls=max(0, len(called) - scenario.ideal_tool_calls),
         confirmations=len(confirmations),
@@ -151,3 +166,29 @@ def run_evaluation(
     world.reset()  # po vyhodnotení nechaj demo dáta čisté
     world.close()
     return result
+
+
+def rescore(directory: Path, scenarios: Sequence[Scenario], public_titles: Sequence[str]) -> int:
+    """Znova vyhodnotí ODPOVEDE v uložených výsledkoch (po oprave kontroly odpovede) bez nového behu modelu.
+
+    Kontroly nástrojov a stavu sa nemenia – stav systému po behu už nie je k dispozícii, ich výsledok
+    sa preberá z uloženého záznamu. Vráti počet záznamov, ktorým sa zmenil výsledok.
+    """
+    by_id = {scenario.id: scenario for scenario in scenarios}
+    changed = 0
+    for path in sorted(directory.glob("*.json")):
+        data = json.loads(path.read_text(encoding="utf-8"))
+        for record in data["records"]:
+            scenario = by_id.get(record["scenario"])
+            if scenario is None:
+                continue
+            kept = [f for f in record["failures"] if not f.startswith(REPLY_FAILURE_PREFIXES)]
+            reply_failures = check_reply(scenario.expect.reply, record["reply"], public_titles)
+            if record["stop_reason"] != "answered":
+                reply_failures.append(f"agent neskončil odpoveďou ({record['stop_reason']})")
+            success = record["tools_ok"] and record["state_ok"] and not reply_failures
+            if success != record["success"]:
+                changed += 1
+            record.update(reply_ok=not reply_failures, success=success, failures=kept + reply_failures)
+        path.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+    return changed

@@ -122,7 +122,9 @@ def main() -> None:
         user_name = login
 
     search = SearchClient(settings.ai_service_url, settings.request_timeout)
-    tools = ToolRegistry([*build_read_tools(api, search), *build_write_tools(api, settings.web_base_url)])
+    tools = ToolRegistry(
+        [*build_read_tools(api, search), *build_write_tools(api, search, settings.web_base_url)]
+    )
     agent = Agent(
         provider,
         tools,
