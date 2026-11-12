@@ -4,7 +4,7 @@ The platform's frontend: **Next.js 16** (React, TypeScript), Tailwind CSS 4 and 
 
 No business logic lives here – the web app calls the API through a typed client generated in [`Shared/`](../Shared/README.md).
 
-> **Status:** the web app shows real data from the backend API (`Backend/Api`): categories, search, listing detail, sign-in (email/password and Google), creating, editing and withdrawing listings, "my listings", and **offers** – sending, comparing, accepting, rejecting and withdrawing them.
+> **Status:** the web app shows real data from the backend API (`Backend/Api`): categories, search, listing detail, sign-in (email/password and Google), creating, editing and withdrawing listings, "my listings", **offers** – sending, comparing, accepting, rejecting and withdrawing them – and the **AI assistant** (the agent from `Backend/AiService`) for signed-in users.
 
 ## Running
 
@@ -19,6 +19,8 @@ cd Frontend/Web && npm install && npm run dev
 The web app runs on http://localhost:3000. If the API is not running, the page shows "Niečo sa nepodarilo" (*something went wrong*) with instructions (`src/app/error.tsx`).
 
 The API address can be changed in `.env.local` (template `.env.example`): `API_URL=http://localhost:5080`.
+
+The **AI assistant** additionally needs the AI service (`Backend/AiService`, see its README) on `AI_SERVICE_URL` (default `http://127.0.0.1:8000`) and a model – the local Ollama or Claude (`AGENT_PROVIDER`). Without it the rest of the web works; the assistant only says it is not available.
 
 | Command | What it does |
 | --- | --- |
@@ -98,6 +100,22 @@ Fixed prices and hourly rates are **never compared with each other** – ranges 
 - The page for sending an offer shows the reason instead of the form when the offer can't be sent: your own listing, a listing that no longer accepts offers, or an offer already sent (the API would refuse it anyway).
 - **Accept, reject and withdraw** ask for confirmation in place (`src/components/confirm-action-button.tsx`) and say what will happen – accepting moves the listing to "In progress" and **rejects the other pending offers**, which cannot be undone. The Server Action `decideOffer` (`src/app/moje-ponuky/actions.ts`) calls `POST /api/v1/offers/{id}/accept|reject|withdraw`; who may do what is checked by the API.
 - Offers come from `getListingOffers` (author only), `getMyOffers` and `getProfile` in `src/lib/api.ts`. "My offers" is also in the account menu.
+
+### AI assistant
+
+A chat panel for signed-in users ("Asistent", bottom right; `src/components/agent/`). It is the same agent as the terminal one in `Backend/AiService` – it searches listings, compares offers and drafts a listing or an offer through the public API, with the user's own permissions.
+
+| Part | Where | What |
+| --- | --- | --- |
+| Bridge to the AI service | `src/app/api/agent/chat/route.ts`, `…/confirm/route.ts` (Route Handlers) | adds the access token from the httpOnly cookie and forwards the request; the agent's steps come back as **Server-Sent Events**, passed through unchanged. The token never reaches the browser's JavaScript. |
+| Events and the stream reader | `src/lib/agent.ts` | event types (`tool_call`, `confirmation_required`, `message` …) and `readAgentEvents` |
+| Panel | `src/components/agent/agent-chat.tsx` | role switch (*Zadávam prácu* / *Hľadám prácu* – the agent's role for the conversation), suggested requests, live steps, the answer with model, time and estimated cost; **Stop** cancels the run |
+| Confirmation card | `src/components/agent/agent-parts.tsx` | every write (new listing, offer, accept/reject) shows a preview with **Potvrdiť / Zrušiť** and a 5-minute countdown – the agent waits on the server until you decide |
+| Visible only signed in | `src/components/agent/agent-launcher.tsx` in `app/layout.tsx` | in the root layout, so the conversation survives navigation (e.g. clicking the link to the created listing) |
+
+- **Nothing is written without a click:** declining, letting the confirmation expire, pressing Stop or closing the tab all leave the data unchanged (the AI service declines a pending confirmation when the stream is closed).
+- After a write the current page is refreshed (`router.refresh()`), and the step shows **"Otvoriť na webe →"** – the new listing or offer is visibly real.
+- The model's answer is rendered as text (paragraphs, lists, **bold**, links) without a Markdown library and without HTML, so nothing from the model's output is executed.
 
 ### Not yet in the web app
 
