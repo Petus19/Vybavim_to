@@ -235,7 +235,7 @@ Base URL `http://localhost:5080/api/v1` · full reference in [`Backend/Api/READM
 | Phase | Scope | Status |
 |---|---|---|
 | 0 – Foundation | architecture, Docker, database, search API, tests, CI | ✅ done |
-| 1 – MVP | accounts ✅, Google sign-in ✅, profiles ✅, posting listings ✅, offers on listings ✅ (API), **choosing a specialist → project**, chat, reviews, email notifications, GDPR tools | in progress |
+| 1 – MVP | accounts ✅, Google sign-in ✅, profiles ✅, posting listings ✅, offers on listings ✅, **choosing a specialist → project**, chat, reviews, email notifications, GDPR tools | in progress |
 | 2 – Monetization & AI | Stripe subscriptions; AI features in a separate **Python (FastAPI) service** – foundation ✅, semantic search ✅, search evaluation ✅, **AI agent with evaluation ✅**; **the agent in the web app ✅**; next: category suggestion (trained scikit-learn classifier), using the service from the C# API and web, listing-writing assistant (LLM), content moderation | AI in progress |
 | 3 – Growth | mobile app (Expo) on the same API, escrow payments, matching/recommendations and fraud detection (ML) | planned |
 

@@ -9,8 +9,8 @@ A separate **Python (FastAPI)** service for the AI features of Vybavím to – s
 | 3 – Evaluation | labelled query set; recall@5 and MRR of keyword search, BM25, two embedding models and a hybrid | ✅ |
 | 3b – Hybrid search | `/search` serves BM25 + embeddings (Reciprocal Rank Fusion) with a minimum score, so it can say "nothing relevant" | ✅ |
 | 4 – AI agent | the agent calls the REST API as tools, human confirmation before every write, switchable model provider (local Ollama / Claude), evaluation on 24 scenarios | ✅ |
-| 5 – Trained model | scikit-learn classifier on embeddings that suggests a listing category; train/test split, F1, confusion matrix | next |
 | 4b – Agent for the web | `POST /agent/chat` streams the agent's steps (Server-Sent Events), `POST /agent/confirm` approves a write; confirmation bound to the user, expires after 5 minutes | ✅ |
+| 5 – Trained model | scikit-learn classifier on embeddings that suggests a listing category; train/test split, F1, confusion matrix | next |
 | 6 – Integration | the C# API and the web call the service (search box, "similar listings"); the main app keeps working when it is down | planned |
 
 ## Stack
