@@ -4,13 +4,15 @@
 
 **A two-sided service marketplace** – people and small businesses post a job ("logo for my café", "office network support"), and freelancers or agencies respond. The first target market is IT and graphic design in Slovakia (hence the Slovak UI; *Vybavím to* means *"I'll get it done"*).
 
-> **Status:** work in progress (started October 2026). Browsing and search, accounts (email/password + Google) and posting/managing listings work end to end (web + API + database). Profiles and **offers on listings** (send, accept → listing moves to in-progress, reject, withdraw) are done in the API; their web pages are next. A separate **Python AI service** does hybrid semantic search and runs an **AI agent** that acts in the marketplace through the public API, with human confirmation before every change – both measured, not assumed. Then projects, chat and reviews – see [Roadmap](#roadmap).
+> **Status:** work in progress (started October 2026). Browsing and search, accounts (email/password + Google) and posting/managing listings work end to end (web + API + database). Profiles and **offers on listings** (send, compare, accept → listing moves to in-progress, reject, withdraw) work in the API and on the web. A separate **Python AI service** does hybrid semantic search and runs an **AI agent** that acts in the marketplace through the public API, with human confirmation before every change – both measured, not assumed. The agent works in the terminal and as a chat assistant in the web app. Then projects, chat and reviews – see [Roadmap](#roadmap).
 
 | Listings with search and filters | Listing detail |
 |---|---|
 | ![Listings](docs/screenshots/listings.png) | ![Listing detail](docs/screenshots/listing-detail.png) |
 | **Home page** | **Interactive API documentation (OpenAPI + Scalar)** |
 | ![Home](docs/screenshots/home.png) | ![API docs](docs/screenshots/api-docs.png) |
+
+<p align="center"><img src="docs/screenshots/agent-web.gif" alt="AI assistant in the web app posting a listing after confirmation" width="420"><br><sub><b>AI assistant in the web app</b> (Claude Opus 5.5): a request in Slovak → the steps stream live → the write waits for <b>Potvrdiť</b> → the listing is posted. 11 s, ~$0.02.</sub></p>
 
 ---
 
@@ -19,9 +21,9 @@
 - **Backend architecture** – a *modular monolith* in C# / ASP.NET Core (.NET 10): each business module owns its code, its database schema and a small public contract. Module boundaries are enforced by the compiler **and** by automated architecture tests.
 - **Domain modelling** – entities protect their own rules (factory methods, private setters, explicit state transitions); every broken rule has a stable error code and a human-readable message.
 - **A real REST API** – accent- and case-insensitive text search with filters, paging, authentication with access/refresh tokens and Google sign-in, role-based authorization, RFC 9457 error responses, OpenAPI docs.
-- **Testing and CI** – 126 automated C# tests: unit, architecture, and integration tests that run the whole API against a throw-away PostgreSQL in Docker (Testcontainers), plus 115 Python tests for the AI service and the agent. GitHub Actions builds and tests the backend, the AI service (including its Docker image) and the frontend on every pull request.
+- **Testing and CI** – 126 automated C# tests: unit, architecture, and integration tests that run the whole API against a throw-away PostgreSQL in Docker (Testcontainers), plus 139 Python tests for the AI service and the agent. GitHub Actions builds and tests the backend, the AI service (including its Docker image) and the frontend on every pull request.
 - **AI service (Python)** – a FastAPI service next to the C# API. Multilingual sentence embeddings stored in PostgreSQL with pgvector (HNSW) power semantic search and "similar listings": a query like "someone to design a company sign" finds the logo job with no words in common. **Measured, not assumed:** on a labelled set of 43 Slovak queries, recall@5 goes from **0.24** (current keyword search) to **0.86** (semantic) and **0.91** (hybrid with BM25, which can also answer "nothing relevant"); the evaluation also decided which embedding model to keep. See [`Backend/AiService`](Backend/AiService/README.md).
-- **AI agent** – from a request in Slovak (*"Potrebujem logo pre kaviareň v Košiciach do 200 €"*, *"Prijmi ponuku od Lucie"*) the agent calls the **public REST API as tools** with the user's own token: it posts listings, compares and accepts offers, finds work and sends offers. **Every write shows a preview and needs an explicit "y" – enforced in code, not in the prompt.** The model provider is **one environment variable**: a local model via Ollama or Claude via the Anthropic SDK. On 24 scenarios checked through the API (including prompt injection and 4 held-out cases): **Claude Opus 5.5 and Haiku 5.5 100 %**, local qwen2.5:7b 62 % (0 % held-out); redesigning the tools around user intent raised every model. See [AI agent](Backend/AiService/README.md#ai-agent).
+- **AI agent** – from a request in Slovak (*"Potrebujem logo pre kaviareň v Košiciach do 200 €"*, *"Prijmi ponuku od Lucie"*) the agent calls the **public REST API as tools** with the user's own token: it posts listings, compares and accepts offers, finds work and sends offers. **Every write shows a preview and needs an explicit confirmation – enforced in code, not in the prompt.** In the web app it is a chat panel: the agent's steps stream live (Server-Sent Events) and a write waits for **Potvrdiť / Zrušiť**, bound to the same user and valid for 5 minutes. The model provider is **one environment variable**: a local model via Ollama or Claude via the Anthropic SDK. On 24 scenarios checked through the API (including prompt injection and 4 held-out cases): **Claude Opus 5.5 and Haiku 5.5 100 %**, local qwen2.5:7b 62 % (0 % held-out); redesigning the tools around user intent raised every model. See [AI agent](Backend/AiService/README.md#ai-agent).
 - **Teamwork** – two developers, every change goes through a branch, a descriptive pull request and a green CI run. The web client consumes TypeScript types generated from the API's OpenAPI document.
 
 ## Team
@@ -54,6 +56,7 @@ flowchart LR
     ai -->|"own schema ai<br/>pgvector"| db
     agent["AI agent<br/>LLM: Ollama or Claude"] -->|"REST with the user's token<br/>(confirmation before writes)"| api
     agent -->|hybrid search| ai
+    web -->|"chat: SSE + confirmation<br/>(token from the cookie)"| agent
 ```
 
 ```
@@ -161,6 +164,8 @@ cd Backend/AiService
 uv run python -m ai_service.agent --as client       # or --as specialist
 ```
 
+In the web app the same agent is the **"Asistent"** button (bottom right) after signing in – it needs the AI service running (`uv run uvicorn ai_service.main:app --port 8000`).
+
 **Demo data:** 4 categories, 62 listings and their authors' profiles are created automatically in development. Development-only accounts are seeded as well (never created outside the Development environment):
 
 | User | Password | Role in the demo |
@@ -189,7 +194,7 @@ npm run lint && npm run typecheck && npm run build
 
 ```bash
 cd Backend/AiService
-uv run pytest                          # 115 tests; Docker must be running (pgvector container)
+uv run pytest                          # 139 tests; Docker must be running (pgvector container)
 uv run python -m ai_service.evaluation # search quality: recall@5 and MRR per method
 uv run python -m ai_service.agent.eval --provider local   # agent: 24 scenarios against the running stack
 ```
@@ -232,8 +237,8 @@ Base URL `http://localhost:5080/api/v1` · full reference in [`Backend/Api/READM
 | Phase | Scope | Status |
 |---|---|---|
 | 0 – Foundation | architecture, Docker, database, search API, tests, CI | ✅ done |
-| 1 – MVP | accounts ✅, Google sign-in ✅, profiles ✅, posting listings ✅, offers on listings ✅ (API), **choosing a specialist → project**, chat, reviews, email notifications, GDPR tools | in progress |
-| 2 – Monetization & AI | Stripe subscriptions; AI features in a separate **Python (FastAPI) service** – foundation ✅, semantic search ✅, search evaluation ✅, **AI agent with evaluation ✅**; next: the agent in the web app, category suggestion (trained scikit-learn classifier), using the service from the C# API and web, listing-writing assistant (LLM), content moderation | AI in progress |
+| 1 – MVP | accounts ✅, Google sign-in ✅, profiles ✅, posting listings ✅, offers on listings ✅, **choosing a specialist → project**, chat, reviews, email notifications, GDPR tools | in progress |
+| 2 – Monetization & AI | Stripe subscriptions; AI features in a separate **Python (FastAPI) service** – foundation ✅, semantic search ✅, search evaluation ✅, **AI agent with evaluation ✅**; **the agent in the web app ✅**; next: category suggestion (trained scikit-learn classifier), using the service from the C# API and web, listing-writing assistant (LLM), content moderation | AI in progress |
 | 3 – Growth | mobile app (Expo) on the same API, escrow payments, matching/recommendations and fraud detection (ML) | planned |
 
 The AI service never reads other modules' tables: it calls the public REST API (later it will also subscribe to domain events), so it has the same permissions as a regular user. It keeps only its own `ai` schema for embeddings.

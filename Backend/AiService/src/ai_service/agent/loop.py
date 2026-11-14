@@ -44,7 +44,8 @@ class AgentReply:
     seconds: float = 0.0
 
 
-# Udalosti pre výpis v termináli (a neskôr pre web): ("tool_call", ToolCall) / ("tool_result", ToolStep)
+# Udalosti pre výpis v termináli a webový chat:
+# ("thinking", číslo kroku) / ("tool_call", ToolCall) / ("tool_result", ToolStep)
 type EventHandler = Callable[[str, Any], None]
 
 
@@ -72,7 +73,8 @@ class Agent:
         reply = AgentReply(text="", stop_reason="answered")
         self.history.append(UserMessage(text))
 
-        for _ in range(self.max_steps):
+        for step in range(1, self.max_steps + 1):
+            self._on_event("thinking", step)  # web ukáže „Premýšľam…“, kým model odpovedá
             try:
                 completion = self.provider.complete(self.system, self.history, self.tools.specs)
             except LLMError as error:

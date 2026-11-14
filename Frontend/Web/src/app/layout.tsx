@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Inter } from "next/font/google";
+import { AgentLauncher } from "@/components/agent/agent-launcher";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { themeInitScript } from "@/lib/theme";
@@ -32,6 +34,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <SiteHeader />
         <main className="flex-1">{children}</main>
         <SiteFooter />
+        {/* AI asistent – číta cookie (prihlásenie), preto v Suspense; zvyšok stránky nečaká */}
+        <Suspense fallback={null}>
+          <AgentLauncher />
+        </Suspense>
       </body>
     </html>
   );

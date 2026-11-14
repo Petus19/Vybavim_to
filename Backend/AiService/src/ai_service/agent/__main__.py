@@ -12,6 +12,7 @@ from datetime import date
 from typing import Any
 
 from ai_service.agent.config import AgentSettings
+from ai_service.agent.describe import summarize_result
 from ai_service.agent.llm import LLMError, ToolCall
 from ai_service.agent.loop import Agent, AgentReply, ToolStep
 from ai_service.agent.marketplace import ApiError, MarketplaceClient, SearchClient
@@ -31,48 +32,14 @@ def _arguments(call: ToolCall) -> str:
     return ", ".join(f"{k}={json.dumps(v, ensure_ascii=False)}" for k, v in call.arguments.items())
 
 
-def _summary(data: Any) -> str:
-    """Jeden riadok o výsledku nástroja – celé dáta dostáva model, človek vidí súhrn."""
-    if isinstance(data, dict):
-        if "error" in data:
-            return f"chyba {data['error']}: {data.get('message', '')}"
-        status = data.get("status")
-        if status == "declined":
-            return "nepotvrdené – nič sa nevykonalo"
-        if status in {"created", "sent", "accepted", "rejected"}:
-            done = {
-                "created": "vytvorené",
-                "sent": "odoslané",
-                "accepted": "prijaté",
-                "rejected": "odmietnuté",
-            }
-            return f"{done[status]} {data.get('url', '')}".rstrip()
-        if "ambiguous" in data:
-            return f"nejednoznačné – {len(data['ambiguous'])} inzeráty"
-        if "listings" in data:
-            count = sum(len(group["offers"]) for group in data["listings"])
-            return f"{count} ponúk na {len(data['listings'])} inzerátoch"
-        for key in ("results", "offers"):
-            if key in data:
-                items = data[key]
-                titles = ", ".join(str(i.get("title") or i.get("specialist")) for i in items[:3])
-                return f"{len(items)} – {titles}" if items else "nič (0)"
-        if "title" in data:
-            return f"{data['title']} · {data.get('budget', '')}"
-        if "name" in data:
-            return str(data["name"])
-    if isinstance(data, list):
-        return f"{len(data)} položiek"
-    return json.dumps(data, ensure_ascii=False)[:120]
-
-
 def on_event(kind: str, payload: Any) -> None:
     if kind == "tool_call":
         print(f"  {CYAN}→ {payload.name}({_arguments(payload)}){RESET}")
     elif kind == "tool_result":
         step: ToolStep = payload
         color = RED if step.outcome.is_error else GREEN
-        print(f"    {color}{'✗' if step.outcome.is_error else '✓'} {_summary(step.outcome.data)}{RESET}")
+        mark = "✗" if step.outcome.is_error else "✓"
+        print(f"    {color}{mark} {summarize_result(step.outcome.data)}{RESET}")
 
 
 def confirm(tool_name: str, preview: str) -> bool:
