@@ -12,6 +12,8 @@
 | **Home page** | **Interactive API documentation (OpenAPI + Scalar)** |
 | ![Home](docs/screenshots/home.png) | ![API docs](docs/screenshots/api-docs.png) |
 
+<p align="center"><img src="docs/screenshots/agent-web.gif" alt="AI assistant in the web app posting a listing after confirmation" width="420"><br><sub><b>AI assistant in the web app</b> (Claude Opus 5.5): a request in Slovak → the steps stream live → the write waits for <b>Potvrdiť</b> → the listing is posted. 11 s, ~$0.02.</sub></p>
+
 ---
 
 ## What this project shows
